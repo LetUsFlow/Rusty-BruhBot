@@ -10,3 +10,6 @@ serenity = { version = "0", default-features = false, features = ["client", "gat
 songbird = "0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 dotenvy = "0"
+reqwest = { version = "0", features = ["rustls-tls", "json"] }
+serde = "1"
+async-recursion = "1"

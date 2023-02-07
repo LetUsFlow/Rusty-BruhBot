@@ -1,4 +1,5 @@
 use std::env;
+use std::error::Error;
 
 use dotenvy::dotenv;
 use serenity::async_trait;
@@ -6,7 +7,10 @@ use serenity::model::application::command::Command;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
+use serenity::model::prelude::{Message};
 use serenity::prelude::*;
+
+mod supabase_adapter;
 
 struct Handler;
 
@@ -23,7 +27,8 @@ impl EventHandler for Handler {
                     } else {
                         println!("Play bruh");
                     }
-                    ":sunglasses:".to_string()
+                    //":sunglasses:".to_string()
+                    "not implemented :(".to_string()
                 }
                 "ping" => "Hey, I'm alive! Temporarily, at least...".to_string(),
                 _ => "not implemented :(".to_string(),
@@ -38,6 +43,14 @@ impl EventHandler for Handler {
                 .await
             {
                 println!("Cannot respond to slash command: {why}");
+            }
+        }
+    }
+
+    async fn message(&self, ctx: Context, msg: Message) {
+        if msg.content == "!ping" {
+            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+                println!("Error sending message: {why:?}");
             }
         }
     }
@@ -67,17 +80,24 @@ impl EventHandler for Handler {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
 
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKENin the environment");
+    let api = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
 
+    dbg!(supabase_adapter::get_list(&api, "commands", 1, 1).await?);
+    dbg!(supabase_adapter::get_full_list(&api, "commands").await?);
+    
     // Build our client.
-    let mut client = Client::builder(token, GatewayIntents::empty())
-        .event_handler(Handler)
-        .await
-        .expect("Error creating client");
+    let mut client = Client::builder(
+        token,
+        GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT,
+    )
+    .event_handler(Handler)
+    .await
+    .expect("Error creating client");
 
     // Finally, start a single shard, and start listening to events.
     //
@@ -86,4 +106,6 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("Client error: {why:?}");
     }
+
+    Ok(())
 }
