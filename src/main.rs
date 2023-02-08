@@ -1,18 +1,25 @@
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
+use std::time::Duration;
 
 use dotenvy::dotenv;
+use log::{error, warn, Level, info};
+use once_cell::sync::Lazy;
 use serenity::async_trait;
 use serenity::model::application::command::Command;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::{Message};
+use serenity::model::prelude::Message;
 use serenity::prelude::*;
+use tokio::time::sleep;
 
 mod supabase_adapter;
 
 struct Handler;
+
+static COMMANDS: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -42,7 +49,7 @@ impl EventHandler for Handler {
                 })
                 .await
             {
-                println!("Cannot respond to slash command: {why}");
+                warn!("Cannot respond to slash command: {why}");
             }
         }
     }
@@ -50,7 +57,7 @@ impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         if msg.content == "!ping" {
             if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-                println!("Error sending message: {why:?}");
+                warn!("Error sending message: {why:?}");
             }
         }
     }
@@ -83,13 +90,38 @@ impl EventHandler for Handler {
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
 
+    simple_logger::init_with_level(Level::Warn).unwrap();
+
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKENin the environment");
+    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
     let api = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
 
-    dbg!(supabase_adapter::get_list(&api, "commands", 1, 1).await?);
-    dbg!(supabase_adapter::get_full_list(&api, "commands").await?);
-    
+    COMMANDS.lock().await.extend(
+        get_command_data()
+            .await
+            .unwrap_or_else(|_| panic!("Could not load command data from database: {api}")),
+    );
+
+    tokio::spawn(async move {
+        loop {
+            sleep(Duration::from_secs(10)).await;
+            let command_data = get_command_data().await;
+
+            match command_data {
+                Ok(data) => {
+                    let mut commands = COMMANDS.lock().await;
+
+                    commands.clear();
+                    commands.extend(data);
+                    info!("Successfully updated command data");
+                }
+                Err(err) => {
+                    warn!("Failed updating command data: {err}");
+                }
+            }
+        }
+    });
+
     // Build our client.
     let mut client = Client::builder(
         token,
@@ -104,8 +136,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Shards will automatically attempt to reconnect, and will perform
     // exponential backoff until it reconnects.
     if let Err(why) = client.start().await {
-        println!("Client error: {why:?}");
+        error!("Client error: {why:?}");
     }
 
     Ok(())
+}
+
+async fn get_command_data() -> Result<HashMap<String, String>, reqwest::Error> {
+    let mut res = HashMap::new();
+
+    let api = env::var("POCKETBASE_API").unwrap();
+    let source = supabase_adapter::get_full_list(&api, "sounds").await?;
+
+    for item in source.items {
+        res.insert(
+            item.command,
+            format!(
+                "{api}/api/files/{}/{}/{}",
+                item.collectionId, item.id, item.audio
+            ),
+        );
+    }
+    Ok(res)
 }

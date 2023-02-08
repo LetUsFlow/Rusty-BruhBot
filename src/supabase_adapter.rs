@@ -8,23 +8,20 @@ pub struct SupabaseCommandsList {
     page: usize,
     perPage: usize,
     totalItems: usize,
-    items: Vec<SupabaseCommandItem>
+    pub items: Vec<SupabaseCommandItem>
 }
 
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
 pub struct SupabaseCommandItem {
-    collectionId: String,
-    collectionName: String,
-    command: String,
-    created: String,
-    id: String,
-    sound: String,
-    updated: String
+    pub collectionId: String,
+    pub command: String,
+    pub id: String,
+    pub audio: String,
 }
 
 pub async fn get_list(api: &String, collection: &str, page: usize, per_page: usize) -> Result<SupabaseCommandsList, reqwest::Error> {
-    reqwest::get(api.to_owned() + &format!("collections/{collection}/records?page={page}&perPage={per_page}"))
+    reqwest::get(api.to_owned() + &format!("/api/collections/{collection}/records?page={page}&perPage={per_page}"))
         .await?
         .json::<SupabaseCommandsList>()
         .await
