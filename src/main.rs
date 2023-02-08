@@ -4,16 +4,17 @@ use std::error::Error;
 use std::time::Duration;
 
 use dotenvy::dotenv;
-use log::{error, warn, Level, info};
+use log::{error, info, warn, Level};
+use tokio::time::sleep;
 use once_cell::sync::Lazy;
+use serenity::prelude::*;
 use serenity::async_trait;
 use serenity::model::application::command::Command;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::Message;
-use serenity::prelude::*;
-use tokio::time::sleep;
+use serenity::model::prelude::{Message, Member};
+use songbird::{SerenityInit, TrackEvent, EventContext, Event};
 
 mod supabase_adapter;
 
@@ -29,6 +30,7 @@ impl EventHandler for Handler {
                 "bruh" => {
                     if let Some(cdo) = command.data.options.get(0) {
                         if let Some(sound) = &cdo.value {
+                            println!("{}", play_sound(&ctx, &command.member.clone().unwrap(), sound.as_str().unwrap().to_string()).await);
                             println!("Play {sound}");
                         }
                     } else {
@@ -86,6 +88,87 @@ impl EventHandler for Handler {
     }
 }
 
+async fn get_sound_uri(sound: &String) -> Option<String> {
+    let commands = COMMANDS.lock().await;
+
+    commands.get(sound).cloned()
+}
+
+async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
+    let sound_uri = get_sound_uri(&sound).await;
+    let sound_uri = match sound_uri {
+        Some(sound_uri) => sound_uri,
+        None => return false,
+    };
+
+    let guild = match ctx.cache.guild(author.guild_id) {
+        Some(guild) => guild,
+        None => {
+            warn!("Cannot find guild in cache: {}", author.guild_id);
+            return false;
+        },
+    };
+    let guild_id = author.guild_id;
+
+    let channel_id = guild
+        .voice_states.get(&author.user.id)
+        .and_then(|voice_state| voice_state.channel_id);
+
+    let connect_to = match channel_id {
+        Some(channel) => channel,
+        None => {
+            warn!("Cannot find channel: {channel_id:?}");
+            return false;
+        }
+    };
+
+    let manager = songbird::get(ctx).await
+        .expect("Songbird Voice client placed in at initialisation.").clone();
+
+    println!("Joins voicechannel");
+    let handler_lock = manager.join(guild_id, connect_to).await;
+    dbg!(&handler_lock);
+    let handler_lock = handler_lock.0;
+    println!("benjamins professionelles debug statement");
+    let mut handler = handler_lock.lock().await;
+
+    println!("{sound_uri}");
+    let source = match songbird::ytdl(sound_uri).await {
+        Ok(source) => source,
+        Err(err) => {
+            warn!("Err starting source: {err:?}");
+            return false;
+        },
+    };
+
+    println!("Plays sound");
+    let track = handler.play_source(source);
+
+    println!("{:?}", track.metadata());
+    let res = track.add_event(songbird::Event::Track(TrackEvent::End), TrackEndNotifier {});
+    dbg!(&res);
+
+    sleep(Duration::from_secs(10)).await;
+    
+    println!("Leaves");
+    let _ = handler.leave().await;
+
+    true
+}
+
+struct TrackEndNotifier;
+
+#[async_trait]
+impl songbird::events::EventHandler for TrackEndNotifier {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        println!("track end");
+        if let EventContext::Track(track_list) = ctx {
+            dbg!(track_list);
+        }
+        None
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
@@ -125,9 +208,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Build our client.
     let mut client = Client::builder(
         token,
-        GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT,
+        GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILDS
     )
     .event_handler(Handler)
+    .register_songbird()
     .await
     .expect("Error creating client");
 
