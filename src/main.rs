@@ -11,10 +11,11 @@ use serenity::model::application::command::Command;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::{Member, Message, GuildId};
+use serenity::model::prelude::interaction::application_command::CommandDataOption;
+use serenity::model::prelude::{GuildId, Member, Message};
 use serenity::prelude::*;
 use songbird::tracks::TrackHandle;
-use songbird::{Event, EventContext, SerenityInit, TrackEvent, Call, create_player};
+use songbird::{create_player, Call, Event, EventContext, SerenityInit, TrackEvent};
 use tracing::{error, warn};
 
 mod command_manager;
@@ -29,29 +30,28 @@ impl EventHandler for Handler {
         if let Interaction::ApplicationCommand(command) = interaction {
             let content = match command.data.name.as_str() {
                 "bruh" => {
-                    match command.data.options.get(0) {
-                        Some(cdo,) => {
-                            match command.member.clone() {
-                                Some(author) => {
-                                    match &cdo.value {
-                                        Some(sound) => {
-                                            let _status = play_sound(
-                                                &ctx,
-                                                &author,
-                                                sound.as_str().unwrap_or("").to_string()
-                                            ).await;
-                
-                                            ":sunglasses:".to_string()
-                                        },
-                                        None => "Something went terribly wrong here...".to_string(),
-                                    }
-                                },
-                                None => "Hmm, This is not a guild. Everything is a lie...".to_string(),
-                            }
-                        },
-                        None => command_manager::list_commands().await
-                    }
+                    let cdo = command.data.options.get(0);
+                    let author = command.member.clone();
 
+                    match (cdo, author) {
+                        (
+                            Some(CommandDataOption {
+                                value: Some(ref sound),
+                                ..
+                            }),
+                            Some(author),
+                        ) => {
+                            play_sound(&ctx, &author, sound.as_str().unwrap_or("").to_string())
+                                .await;
+
+                            ":sunglasses:".to_string()
+                        }
+                        (_, None) => {
+                            "You shouldn't be here, I shouldn't be here, we both know it..."
+                                .to_string()
+                        }
+                        _ => command_manager::list_commands().await,
+                    }
                 }
                 "ping" => "Hey, I'm alive! Temporarily, at least...".to_string(),
                 _ => "i donbt know dis command uwu :(".to_string(),
@@ -73,11 +73,14 @@ impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         let content = msg.content.trim().to_lowercase();
         if content == "brelp" || content == "bruhelp" {
-            if let Err(why) = msg.channel_id.say(&ctx.http, command_manager::list_commands().await).await {
+            if let Err(why) = msg
+                .channel_id
+                .say(&ctx.http, command_manager::list_commands().await)
+                .await
+            {
                 warn!("Error sending message: {why:?}");
             }
-        }
-        else if let Some(guild_id) = msg.guild_id {
+        } else if let Some(guild_id) = msg.guild_id {
             if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
                 play_sound(&ctx, &author, content).await;
             }
@@ -89,7 +92,8 @@ impl EventHandler for Handler {
 
         Command::set_global_application_commands(&ctx.http, |commands| {
             commands
-                .create_application_command(|command| { // Enable autocomplete for all sounds
+                .create_application_command(|command| {
+                    // Enable autocomplete for all sounds
                     command
                         .name("bruh")
                         .description("Play a sound")
@@ -104,7 +108,8 @@ impl EventHandler for Handler {
                     command.name("ping").description("A ping command")
                 })
         })
-        .await.ok();
+        .await
+        .ok();
     }
 }
 
@@ -142,7 +147,6 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         .expect("Songbird Voice client placed in at initialisation")
         .clone();
 
-
     if !CONNECTIONS.lock().await.insert(guild_id) {
         return false;
     }
@@ -166,27 +170,32 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
     // Add disconnect eventlistener
     handler.add_global_event(
         songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
-        DriverDisconnectNotifier {audio_handle: audio_handle.clone(), guild_id}
+        DriverDisconnectNotifier {
+            audio_handle: audio_handle.clone(),
+            guild_id,
+        },
     );
 
     // Start playing audio
     handler.play_only(audio);
 
     // Add track end eventlistener
-    audio_handle.add_event(
-        songbird::Event::Track(TrackEvent::End),
-        TrackEndNotifier {
-            handler_lock: handler_lock.clone(),
-            guild_id
-        },
-    ).ok();
+    audio_handle
+        .add_event(
+            songbird::Event::Track(TrackEvent::End),
+            TrackEndNotifier {
+                handler_lock: handler_lock.clone(),
+                guild_id,
+            },
+        )
+        .ok();
 
     true
 }
 
 struct TrackEndNotifier {
     handler_lock: Arc<Mutex<Call>>,
-    guild_id: GuildId
+    guild_id: GuildId,
 }
 
 #[async_trait]
@@ -201,7 +210,7 @@ impl songbird::events::EventHandler for TrackEndNotifier {
 
 struct DriverDisconnectNotifier {
     audio_handle: TrackHandle,
-    guild_id: GuildId
+    guild_id: GuildId,
 }
 
 #[async_trait]
