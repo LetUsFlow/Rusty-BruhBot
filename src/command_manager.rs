@@ -1,4 +1,7 @@
-use std::{collections::HashMap, env, sync::Mutex, time::Duration};
+use std::env;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::collections::HashMap;
 
 use async_recursion::async_recursion;
 use once_cell::sync::Lazy;
@@ -31,6 +34,7 @@ pub async fn setup() {
         .await
         .unwrap_or_else(|_| panic!("Could not load command data from database"));
     COMMANDS.lock().unwrap().extend(command_data);
+    info!("Initially updated command data");
     tokio::spawn(command_updater());
 }
 

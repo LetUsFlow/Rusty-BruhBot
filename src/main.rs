@@ -11,8 +11,7 @@ use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
 use serenity::model::prelude::{Member, Message};
 use serenity::prelude::*;
-use songbird::Call;
-use songbird::{Event, EventContext, SerenityInit, TrackEvent};
+use songbird::{Event, EventContext, SerenityInit, TrackEvent, Call};
 use tracing::{error, warn};
 
 mod command_manager;
