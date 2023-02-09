@@ -52,8 +52,7 @@ impl EventHandler for Handler {
                         }
                         _ => command_manager::list_commands().await,
                     }
-                }
-                "ping" => "Hey, I'm alive! Temporarily, at least...".to_string(),
+                },
                 _ => "i donbt know dis command uwu :(".to_string(),
             };
 
@@ -103,9 +102,6 @@ impl EventHandler for Handler {
                                 .description("Name of sound")
                                 .kind(CommandOptionType::String)
                         })
-                })
-                .create_application_command(|command| {
-                    command.name("ping").description("A ping command")
                 })
         })
         .await
