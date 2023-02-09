@@ -1,21 +1,25 @@
+use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 use std::sync::Arc;
 
 use dotenvy::dotenv;
+use once_cell::sync::Lazy;
 use serenity::async_trait;
 use serenity::framework::StandardFramework;
 use serenity::model::application::command::Command;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::{Member, Message};
+use serenity::model::prelude::{Member, Message, GuildId};
 use serenity::prelude::*;
-use songbird::{Event, EventContext, SerenityInit, TrackEvent, Call};
+use songbird::tracks::TrackHandle;
+use songbird::{Event, EventContext, SerenityInit, TrackEvent, Call, create_player};
 use tracing::{error, warn};
 
 mod command_manager;
 
+static CONNECTIONS: Lazy<Mutex<HashSet<GuildId>>> = Lazy::new(|| Mutex::new(HashSet::new()));
 
 struct Handler;
 
@@ -77,7 +81,7 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
 
-        let _ = Command::set_global_application_commands(&ctx.http, |commands| {
+        Command::set_global_application_commands(&ctx.http, |commands| {
             commands
                 .create_application_command(|command| { // Enable autocomplete for all sounds
                     command
@@ -94,7 +98,7 @@ impl EventHandler for Handler {
                     command.name("ping").description("A ping command")
                 })
         })
-        .await;
+        .await.ok();
     }
 }
 
@@ -132,46 +136,80 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         .expect("Songbird Voice client placed in at initialisation")
         .clone();
 
-    //println!("Joins voicechannel");
-    let handler_lock = manager.join(guild_id, connect_to).await.0;
-    let mut handler = handler_lock.lock().await;
 
+    if !CONNECTIONS.lock().await.insert(guild_id) {
+        return false;
+    }
+
+    // Cretae audio source
     let source = match songbird::ytdl(sound_uri).await {
         Ok(source) => source,
         Err(err) => {
             warn!("Err starting source: {err:?}");
+            CONNECTIONS.lock().await.remove(&guild_id);
             return false;
         }
     };
 
+    // Create audio handler
+    let (audio, audio_handle) = create_player(source);
 
-    //println!("Plays sound");
-    let track = handler.play_source(source);
+    let (handler_lock, _join_result) = manager.join(guild_id, connect_to).await;
+    let mut handler = handler_lock.lock().await;
 
-    // Add eventlisteners
-    let _ = track.add_event(
+    // Add disconnect eventlistener
+    handler.add_global_event(
+        songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
+        DriverDisconnectNotifier {audio_handle: audio_handle.clone(), guild_id}
+    );
+
+    // Start playing audio
+    handler.play_only(audio);
+
+    // Add track end eventlistener
+    audio_handle.add_event(
         songbird::Event::Track(TrackEvent::End),
         TrackEndNotifier {
             handler_lock: handler_lock.clone(),
+            guild_id
         },
-    );
+    ).ok();
 
     true
 }
 
 struct TrackEndNotifier {
     handler_lock: Arc<Mutex<Call>>,
+    guild_id: GuildId
 }
 
 #[async_trait]
 impl songbird::events::EventHandler for TrackEndNotifier {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         let mut handler = self.handler_lock.lock().await;
-        let _ = handler.leave().await;
-        //println!("Leaves");
+        handler.leave().await.ok();
+        CONNECTIONS.lock().await.remove(&self.guild_id);
         None
     }
 }
+
+struct DriverDisconnectNotifier {
+    audio_handle: TrackHandle,
+    guild_id: GuildId
+}
+
+#[async_trait]
+impl songbird::events::EventHandler for DriverDisconnectNotifier {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::DriverDisconnect(_data) = ctx {
+            //dbg!(data);
+            self.audio_handle.stop().ok();
+            CONNECTIONS.lock().await.remove(&self.guild_id);
+        }
+        None
+    }
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -182,7 +220,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Configure the client with your Discord bot token in the environment.
     let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
-    let _ = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
+    env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
 
     // Load commands and start command updater
     command_manager::setup().await;
@@ -201,9 +239,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         error!("Client error: {why:?}");
     }
 
-    let _ = tokio::signal::ctrl_c().await;
+    tokio::signal::ctrl_c().await.ok();
     println!("Received Ctrl-C, shutting down.");
 
     Ok(())
 }
-
