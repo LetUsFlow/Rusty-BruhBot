@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Duration;
 
 use dotenvy::dotenv;
-use log::{error, info, warn, Level};
+use serenity::framework::StandardFramework;
+use songbird::Call;
 use tokio::time::sleep;
 use once_cell::sync::Lazy;
 use serenity::prelude::*;
@@ -15,6 +17,9 @@ use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
 use serenity::model::prelude::{Message, Member};
 use songbird::{SerenityInit, TrackEvent, EventContext, Event};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 mod supabase_adapter;
 
@@ -37,10 +42,10 @@ impl EventHandler for Handler {
                         println!("Play bruh");
                     }
                     //":sunglasses:".to_string()
-                    "not implemented :(".to_string()
-                }
+                    "currently being implemented :(".to_string()
+                },
                 "ping" => "Hey, I'm alive! Temporarily, at least...".to_string(),
-                _ => "not implemented :(".to_string(),
+                _ => "i donbt know dis command uwu :(".to_string(),
             };
 
             if let Err(why) = command
@@ -126,13 +131,9 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         .expect("Songbird Voice client placed in at initialisation.").clone();
 
     println!("Joins voicechannel");
-    let handler_lock = manager.join(guild_id, connect_to).await;
-    dbg!(&handler_lock);
-    let handler_lock = handler_lock.0;
-    println!("benjamins professionelles debug statement");
+    let handler_lock = manager.join(guild_id, connect_to).await.0;
     let mut handler = handler_lock.lock().await;
 
-    println!("{sound_uri}");
     let source = match songbird::ytdl(sound_uri).await {
         Ok(source) => source,
         Err(err) => {
@@ -144,27 +145,21 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
     println!("Plays sound");
     let track = handler.play_source(source);
 
-    println!("{:?}", track.metadata());
-    let res = track.add_event(songbird::Event::Track(TrackEvent::End), TrackEndNotifier {});
-    dbg!(&res);
-
-    sleep(Duration::from_secs(10)).await;
-    
-    println!("Leaves");
-    let _ = handler.leave().await;
+    let _ = track.add_event(songbird::Event::Track(TrackEvent::End), TrackEndNotifier {handler_lock: handler_lock.clone()});
 
     true
 }
 
-struct TrackEndNotifier;
+struct TrackEndNotifier {
+    handler_lock: Arc<Mutex<Call>>
+}
 
 #[async_trait]
 impl songbird::events::EventHandler for TrackEndNotifier {
-    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
-        println!("track end");
-        if let EventContext::Track(track_list) = ctx {
-            dbg!(track_list);
-        }
+    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
+        let mut handler = self.handler_lock.lock().await;
+        let _ = handler.leave().await;
+        println!("left from event");
         None
     }
 }
@@ -173,7 +168,7 @@ impl songbird::events::EventHandler for TrackEndNotifier {
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
 
-    simple_logger::init_with_level(Level::Warn).unwrap();
+    tracing_subscriber::fmt::init();
 
     // Configure the client with your Discord bot token in the environment.
     let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
@@ -187,7 +182,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_secs(10)).await;
+            sleep(Duration::from_secs(60)).await;
             let command_data = get_command_data().await;
 
             match command_data {
@@ -208,8 +203,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Build our client.
     let mut client = Client::builder(
         token,
-        GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILDS
+        GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT
     )
+    .framework(StandardFramework::new())
     .event_handler(Handler)
     .register_songbird()
     .await
@@ -222,6 +218,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Err(why) = client.start().await {
         error!("Client error: {why:?}");
     }
+
+    let _ = tokio::signal::ctrl_c().await;
+    println!("Received Ctrl-C, shutting down.");
 
     Ok(())
 }
