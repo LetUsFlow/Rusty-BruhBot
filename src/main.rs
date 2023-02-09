@@ -1,31 +1,23 @@
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::sync::Arc;
-use std::time::Duration;
 
 use dotenvy::dotenv;
-use serenity::framework::StandardFramework;
-use songbird::Call;
-use tokio::time::sleep;
-use once_cell::sync::Lazy;
-use serenity::prelude::*;
 use serenity::async_trait;
+use serenity::framework::StandardFramework;
 use serenity::model::application::command::Command;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::{Message, Member};
-use songbird::{SerenityInit, TrackEvent, EventContext, Event};
-use tracing::error;
-use tracing::info;
-use tracing::warn;
+use serenity::model::prelude::{Member, Message};
+use serenity::prelude::*;
+use songbird::Call;
+use songbird::{Event, EventContext, SerenityInit, TrackEvent};
+use tracing::{error, warn};
 
-mod supabase_adapter;
+mod command_manager;
 
 struct Handler;
-
-static COMMANDS: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -35,7 +27,15 @@ impl EventHandler for Handler {
                 "bruh" => {
                     if let Some(cdo) = command.data.options.get(0) {
                         if let Some(sound) = &cdo.value {
-                            println!("{}", play_sound(&ctx, &command.member.clone().unwrap(), sound.as_str().unwrap().to_string()).await);
+                            println!(
+                                "{}",
+                                play_sound(
+                                    &ctx,
+                                    &command.member.clone().unwrap(),
+                                    sound.as_str().unwrap().to_string()
+                                )
+                                .await
+                            );
                             println!("Play {sound}");
                         }
                     } else {
@@ -43,7 +43,7 @@ impl EventHandler for Handler {
                     }
                     //":sunglasses:".to_string()
                     "currently being implemented :(".to_string()
-                },
+                }
                 "ping" => "Hey, I'm alive! Temporarily, at least...".to_string(),
                 _ => "i donbt know dis command uwu :(".to_string(),
             };
@@ -93,14 +93,8 @@ impl EventHandler for Handler {
     }
 }
 
-async fn get_sound_uri(sound: &String) -> Option<String> {
-    let commands = COMMANDS.lock().await;
-
-    commands.get(sound).cloned()
-}
-
 async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
-    let sound_uri = get_sound_uri(&sound).await;
+    let sound_uri = command_manager::get_sound_uri(&sound).await;
     let sound_uri = match sound_uri {
         Some(sound_uri) => sound_uri,
         None => return false,
@@ -111,12 +105,13 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         None => {
             warn!("Cannot find guild in cache: {}", author.guild_id);
             return false;
-        },
+        }
     };
     let guild_id = author.guild_id;
 
     let channel_id = guild
-        .voice_states.get(&author.user.id)
+        .voice_states
+        .get(&author.user.id)
         .and_then(|voice_state| voice_state.channel_id);
 
     let connect_to = match channel_id {
@@ -127,8 +122,10 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         }
     };
 
-    let manager = songbird::get(ctx).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation")
+        .clone();
 
     println!("Joins voicechannel");
     let handler_lock = manager.join(guild_id, connect_to).await.0;
@@ -139,19 +136,24 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         Err(err) => {
             warn!("Err starting source: {err:?}");
             return false;
-        },
+        }
     };
 
     println!("Plays sound");
     let track = handler.play_source(source);
 
-    let _ = track.add_event(songbird::Event::Track(TrackEvent::End), TrackEndNotifier {handler_lock: handler_lock.clone()});
+    let _ = track.add_event(
+        songbird::Event::Track(TrackEvent::End),
+        TrackEndNotifier {
+            handler_lock: handler_lock.clone(),
+        },
+    );
 
     true
 }
 
 struct TrackEndNotifier {
-    handler_lock: Arc<Mutex<Call>>
+    handler_lock: Arc<Mutex<Call>>,
 }
 
 #[async_trait]
@@ -159,7 +161,7 @@ impl songbird::events::EventHandler for TrackEndNotifier {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         let mut handler = self.handler_lock.lock().await;
         let _ = handler.leave().await;
-        println!("left from event");
+        println!("Leaves");
         None
     }
 }
@@ -168,53 +170,26 @@ impl songbird::events::EventHandler for TrackEndNotifier {
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
 
+    // Enable logging
     tracing_subscriber::fmt::init();
 
     // Configure the client with your Discord bot token in the environment.
     let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
-    let api = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
+    let _ = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
 
-    COMMANDS.lock().await.extend(
-        get_command_data()
-            .await
-            .unwrap_or_else(|_| panic!("Could not load command data from database: {api}")),
-    );
+    // Load commands and start command updater
+    command_manager::setup().await;
 
-    tokio::spawn(async move {
-        loop {
-            sleep(Duration::from_secs(60)).await;
-            let command_data = get_command_data().await;
+    // Build client
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let mut client = Client::builder(token, intents)
+        .framework(StandardFramework::new())
+        .event_handler(Handler)
+        .register_songbird()
+        .await
+        .expect("Error creating client");
 
-            match command_data {
-                Ok(data) => {
-                    let mut commands = COMMANDS.lock().await;
-
-                    commands.clear();
-                    commands.extend(data);
-                    info!("Successfully updated command data");
-                }
-                Err(err) => {
-                    warn!("Failed updating command data: {err}");
-                }
-            }
-        }
-    });
-
-    // Build our client.
-    let mut client = Client::builder(
-        token,
-        GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT
-    )
-    .framework(StandardFramework::new())
-    .event_handler(Handler)
-    .register_songbird()
-    .await
-    .expect("Error creating client");
-
-    // Finally, start a single shard, and start listening to events.
-    //
-    // Shards will automatically attempt to reconnect, and will perform
-    // exponential backoff until it reconnects.
+    // Start the bot
     if let Err(why) = client.start().await {
         error!("Client error: {why:?}");
     }
@@ -225,20 +200,3 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn get_command_data() -> Result<HashMap<String, String>, reqwest::Error> {
-    let mut res = HashMap::new();
-
-    let api = env::var("POCKETBASE_API").unwrap();
-    let source = supabase_adapter::get_full_list(&api, "sounds").await?;
-
-    for item in source.items {
-        res.insert(
-            item.command,
-            format!(
-                "{api}/api/files/{}/{}/{}",
-                item.collectionId, item.id, item.audio
-            ),
-        );
-    }
-    Ok(res)
-}
