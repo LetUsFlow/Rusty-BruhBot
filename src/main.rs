@@ -16,6 +16,7 @@ use tracing::{error, warn};
 
 mod command_manager;
 
+
 struct Handler;
 
 #[async_trait]
@@ -24,24 +25,29 @@ impl EventHandler for Handler {
         if let Interaction::ApplicationCommand(command) = interaction {
             let content = match command.data.name.as_str() {
                 "bruh" => {
-                    if let Some(cdo) = command.data.options.get(0) {
-                        if let Some(sound) = &cdo.value {
-                            println!(
-                                "{}",
-                                play_sound(
-                                    &ctx,
-                                    &command.member.clone().unwrap(),
-                                    sound.as_str().unwrap().to_string()
-                                )
-                                .await
-                            );
-                            println!("Play {sound}");
-                        }
-                    } else {
-                        println!("Play bruh");
+                    match command.data.options.get(0) {
+                        Some(cdo,) => {
+                            match command.member.clone() {
+                                Some(author) => {
+                                    match &cdo.value {
+                                        Some(sound) => {
+                                            let _status = play_sound(
+                                                &ctx,
+                                                &author,
+                                                sound.as_str().unwrap_or("").to_string()
+                                            ).await;
+                
+                                            ":sunglasses:".to_string()
+                                        },
+                                        None => "Something went terribly wrong here...".to_string(),
+                                    }
+                                },
+                                None => "Hmm, This is not a guild. Everything is a lie...".to_string(),
+                            }
+                        },
+                        None => "At some point in the future, this command will list you all available sound. But as of now, this message is shown, because the developer of this bot has been too lazy to implement a help message.".to_string()
                     }
-                    //":sunglasses:".to_string()
-                    "currently being implemented :(".to_string()
+
                 }
                 "ping" => "Hey, I'm alive! Temporarily, at least...".to_string(),
                 _ => "i donbt know dis command uwu :(".to_string(),
@@ -61,9 +67,9 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "!ping" {
-            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-                warn!("Error sending message: {why:?}");
+        if let Some(guild_id) = msg.guild_id {
+            if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
+                play_sound(&ctx, &author, msg.content).await;
             }
         }
     }
@@ -73,7 +79,7 @@ impl EventHandler for Handler {
 
         let _ = Command::set_global_application_commands(&ctx.http, |commands| {
             commands
-                .create_application_command(|command| {
+                .create_application_command(|command| { // Enable autocomplete for all sounds
                     command
                         .name("bruh")
                         .description("Play a sound")
@@ -126,7 +132,7 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         .expect("Songbird Voice client placed in at initialisation")
         .clone();
 
-    println!("Joins voicechannel");
+    //println!("Joins voicechannel");
     let handler_lock = manager.join(guild_id, connect_to).await.0;
     let mut handler = handler_lock.lock().await;
 
@@ -138,9 +144,11 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         }
     };
 
-    println!("Plays sound");
+
+    //println!("Plays sound");
     let track = handler.play_source(source);
 
+    // Add eventlisteners
     let _ = track.add_event(
         songbird::Event::Track(TrackEvent::End),
         TrackEndNotifier {
@@ -160,7 +168,7 @@ impl songbird::events::EventHandler for TrackEndNotifier {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         let mut handler = self.handler_lock.lock().await;
         let _ = handler.leave().await;
-        println!("Leaves");
+        //println!("Leaves");
         None
     }
 }
