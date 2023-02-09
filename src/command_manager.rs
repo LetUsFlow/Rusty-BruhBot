@@ -1,11 +1,11 @@
 use std::env;
-use std::sync::Mutex;
 use std::time::Duration;
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
+use serenity::prelude::Mutex;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -33,15 +33,19 @@ pub async fn setup() {
     let command_data = get_command_data()
         .await
         .unwrap_or_else(|_| panic!("Could not load command data from database"));
-    COMMANDS.lock().unwrap().extend(command_data);
+    COMMANDS.lock().await.extend(command_data);
     info!("Initially updated command data");
     tokio::spawn(command_updater());
 }
 
 pub async fn get_sound_uri(sound: &String) -> Option<String> {
-    let commands = COMMANDS.lock().unwrap();
+    let commands = COMMANDS.lock().await;
 
     commands.get(sound).cloned()
+}
+
+pub async fn list_commands() -> String {
+    COMMANDS.lock().await.iter().map(|c| c.0.clone()).collect::<Vec<String>>().join(", ")
 }
 
 async fn get_list(
@@ -115,7 +119,7 @@ async fn command_updater() {
 
         match command_data {
             Ok(data) => {
-                let mut commands = COMMANDS.lock().unwrap();
+                let mut commands = COMMANDS.lock().await;
 
                 commands.clear();
                 commands.extend(data);

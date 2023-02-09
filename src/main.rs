@@ -49,7 +49,7 @@ impl EventHandler for Handler {
                                 None => "Hmm, This is not a guild. Everything is a lie...".to_string(),
                             }
                         },
-                        None => "At some point in the future, this command will list you all available sound. But as of now, this message is shown, because the developer of this bot has been too lazy to implement a help message.".to_string()
+                        None => command_manager::list_commands().await
                     }
 
                 }
@@ -71,9 +71,15 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        if let Some(guild_id) = msg.guild_id {
+        let content = msg.content.trim().to_lowercase();
+        if content == "brelp" || content == "bruhelp" {
+            if let Err(why) = msg.channel_id.say(&ctx.http, command_manager::list_commands().await).await {
+                warn!("Error sending message: {why:?}");
+            }
+        }
+        else if let Some(guild_id) = msg.guild_id {
             if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
-                play_sound(&ctx, &author, msg.content).await;
+                play_sound(&ctx, &author, content).await;
             }
         }
     }
@@ -209,7 +215,6 @@ impl songbird::events::EventHandler for DriverDisconnectNotifier {
         None
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
