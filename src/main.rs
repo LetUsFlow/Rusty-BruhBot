@@ -16,7 +16,7 @@ use serenity::model::prelude::{GuildId, Member, Message};
 use serenity::prelude::*;
 use songbird::tracks::TrackHandle;
 use songbird::{create_player, Call, Event, EventContext, SerenityInit, TrackEvent};
-use tracing::{error, warn};
+use tracing::{error, warn, info};
 
 mod command_manager;
 
@@ -41,19 +41,19 @@ impl EventHandler for Handler {
                             }),
                             Some(author),
                         ) => {
-                            play_sound(&ctx, &author, sound.as_str().unwrap_or("").to_string())
+                            play_sound(&ctx, &author, sound.as_str().unwrap_or("").into())
                                 .await;
 
-                            ":sunglasses:".to_string()
+                            ":sunglasses:".into()
                         }
                         (_, None) => {
                             "You shouldn't be here, I shouldn't be here, we both know it..."
-                                .to_string()
+                                .into()
                         }
                         _ => command_manager::list_commands().await,
                     }
                 },
-                _ => "i donbt know dis command uwu :(".to_string(),
+                _ => "i donbt know dis command uwu :(".into(),
             };
 
             if let Err(why) = command
@@ -87,7 +87,7 @@ impl EventHandler for Handler {
     }
 
     async fn ready(&self, ctx: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        info!("{} is connected!", ready.user.name);
 
         Command::set_global_application_commands(&ctx.http, |commands| {
             commands
@@ -148,7 +148,7 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
     }
 
     // Cretae audio source
-    let source = match songbird::ytdl(sound_uri).await {
+    let source = match songbird::ffmpeg(sound_uri).await {
         Ok(source) => source,
         Err(err) => {
             warn!("Err starting source: {err:?}");
@@ -250,7 +250,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     tokio::signal::ctrl_c().await.ok();
-    println!("Received Ctrl-C, shutting down.");
+    info!("Received Ctrl-C, shutting down.");
 
     Ok(())
 }
