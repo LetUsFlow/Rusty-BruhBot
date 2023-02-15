@@ -1,23 +1,23 @@
-# Nightly is required until `-Z sparse-registry` is stabilized in Rust 1.68
-# https://github.com/rust-lang/cargo/issues/9069#issuecomment-1408773982
-FROM rustlang/rust:nightly-slim as build
-# FROM rust:1-slim AS build
+FROM rust:1-alpine AS build
 WORKDIR /app
 COPY . /app
 
-RUN apt-get update && \
-    apt-get install -y upx libopus-dev cmake
-RUN cargo build --release -Z sparse-registry #&& \
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+
+RUN rustup toolchain add nightly && \
+    rustup default nightly
+RUN apk add upx musl-dev pkgconf opus-dev
+RUN cargo build --release #&& \
     upx --lzma --best /app/target/release/rusty-bruhbot
 
-FROM debian:stable-slim
+FROM alpine:latest
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y ffmpeg
+RUN apk add ffmpeg && \
+    rm -fr /var/cache/apk/*
 
 COPY --from=build /app/target/release/rusty-bruhbot /app/rusty-bruhbot
 
-USER 1000
+#USER 1000
 
 CMD [ "/app/rusty-bruhbot" ]
