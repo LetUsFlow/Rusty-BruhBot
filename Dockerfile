@@ -4,20 +4,22 @@ FROM rustlang/rust:nightly-slim as build
 # FROM rust:1-slim AS build
 WORKDIR /app
 COPY . /app
+COPY --from=mwader/static-ffmpeg:5.1.2 /ffmpeg /ffmpeg
+
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
 RUN apt-get update && \
     apt-get install -y upx libopus-dev cmake
-RUN cargo build --release -Z sparse-registry #&& \
-    upx --lzma --best /app/target/release/rusty-bruhbot
+RUN cargo build --release && \
+    upx --lzma --best /app/target/release/rusty-bruhbot && \
+    upx -1 /ffmpeg
 
-FROM debian:stable-slim
+FROM gcr.io/distroless/cc:nonroot
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y ffmpeg
-
 COPY --from=build /app/target/release/rusty-bruhbot /app/rusty-bruhbot
+COPY --from=build /ffmpeg /bin/
 
-USER 1000
+USER nonroot
 
 CMD [ "/app/rusty-bruhbot" ]
