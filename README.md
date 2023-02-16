@@ -1,8 +1,10 @@
 # Rusty BruhBot
 
-The legendary [Bruhbot](https://github.com/LetUsFlow/BruhBot) impoved and rewritten in Rust.
+<details>
+<summary>The legendary [Bruhbot](https://github.com/LetUsFlow/BruhBot) impoved and rewritten in Rust.</summary>
 
 ![BruhBot Logo](logo.jpg)
+</details>
 
 ## Requirements
 
@@ -74,4 +76,8 @@ POCKETBASE_API=http://127.0.0.1:8090
 ```
 
 ## Deployment
-TODO
+It is recommended to use Docker for deployment because all dependencies except for PocketBase are bundeled with it.
+The following example assumes that you have already set up and configured PocketBase as described above:
+```bash
+docker run -d --env-file .env --net=host ghcr.io/letusflow/rusty-bruhbot
+```
