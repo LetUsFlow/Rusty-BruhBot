@@ -1,7 +1,7 @@
 # Rusty BruhBot
 
 <details>
-<summary>The legendary [Bruhbot](https://github.com/LetUsFlow/BruhBot) impoved and rewritten in Rust.</summary>
+<summary>The legendary <a href="https://github.com/LetUsFlow/BruhBot">Bruhbot</a> impoved and rewritten in Rust.</summary>
 
 ![BruhBot Logo](logo.jpg)
 </details>
