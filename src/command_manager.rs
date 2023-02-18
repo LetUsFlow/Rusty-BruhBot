@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
-use std::collections::HashMap;
 
 use async_recursion::async_recursion;
 use once_cell::sync::Lazy;
@@ -45,7 +45,13 @@ pub async fn get_sound_uri(sound: &String) -> Option<String> {
 }
 
 pub async fn list_commands() -> String {
-    COMMANDS.lock().await.iter().map(|c| c.0.clone()).collect::<Vec<String>>().join(", ")
+    COMMANDS
+        .lock()
+        .await
+        .iter()
+        .map(|c| c.0.clone())
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 async fn get_list(
@@ -114,7 +120,7 @@ async fn get_command_data() -> Result<HashMap<String, String>, reqwest::Error> {
 
 async fn command_updater() {
     loop {
-        sleep(Duration::from_secs(60)).await;
+        sleep(Duration::from_secs(600)).await;
         let command_data = get_command_data().await;
 
         match command_data {

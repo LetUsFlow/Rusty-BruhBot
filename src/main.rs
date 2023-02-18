@@ -16,7 +16,7 @@ use serenity::model::prelude::{GuildId, Member, Message};
 use serenity::prelude::*;
 use songbird::tracks::TrackHandle;
 use songbird::{create_player, Call, Event, EventContext, SerenityInit, TrackEvent};
-use tracing::{error, warn, info};
+use tracing::{error, info, warn};
 
 mod command_manager;
 
@@ -28,6 +28,7 @@ struct Handler;
 impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
+            let mut play_future = None;
             let content = match command.data.name.as_str() {
                 "bruh" => {
                     let cdo = command.data.options.get(0);
@@ -41,18 +42,19 @@ impl EventHandler for Handler {
                             }),
                             Some(author),
                         ) => {
-                            play_sound(&ctx, &author, sound.as_str().unwrap_or("").into())
-                                .await;
-
+                            play_future = Some(play_sound(
+                                &ctx,
+                                author,
+                                sound.as_str().unwrap_or("").into(),
+                            ));
                             ":sunglasses:".into()
                         }
                         (_, None) => {
-                            "You shouldn't be here, I shouldn't be here, we both know it..."
-                                .into()
+                            "You shouldn't be here, I shouldn't be here, we both know it...".into()
                         }
                         _ => command_manager::list_commands().await,
                     }
-                },
+                }
                 _ => "i donbt know dis command uwu :(".into(),
             };
 
@@ -65,6 +67,9 @@ impl EventHandler for Handler {
                 .await
             {
                 warn!("Cannot respond to slash command: {why}");
+            }
+            if let Some(play_future) = play_future {
+                play_future.await;
             }
         }
     }
@@ -81,7 +86,7 @@ impl EventHandler for Handler {
             }
         } else if let Some(guild_id) = msg.guild_id {
             if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
-                play_sound(&ctx, &author, content).await;
+                play_sound(&ctx, author, content).await;
             }
         }
     }
@@ -90,26 +95,25 @@ impl EventHandler for Handler {
         info!("{} is connected!", ready.user.name);
 
         Command::set_global_application_commands(&ctx.http, |commands| {
-            commands
-                .create_application_command(|command| {
-                    // Enable autocomplete for all sounds
-                    command
-                        .name("bruh")
-                        .description("Play a sound")
-                        .create_option(|option| {
-                            option
-                                .name("sound")
-                                .description("Name of sound")
-                                .kind(CommandOptionType::String)
-                        })
-                })
+            commands.create_application_command(|command| {
+                // Enable autocomplete for all sounds
+                command
+                    .name("bruh")
+                    .description("Play a sound")
+                    .create_option(|option| {
+                        option
+                            .name("sound")
+                            .description("Name of sound")
+                            .kind(CommandOptionType::String)
+                    })
+            })
         })
         .await
         .ok();
     }
 }
 
-async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
+async fn play_sound(ctx: &Context, author: Member, sound: String) -> bool {
     let sound_uri = command_manager::get_sound_uri(&sound).await;
     let sound_uri = match sound_uri {
         Some(sound_uri) => sound_uri,
@@ -147,7 +151,7 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
         return false;
     }
 
-    // Cretae audio source
+    // Create audio source
     let source = match songbird::ffmpeg(sound_uri).await {
         Ok(source) => source,
         Err(err) => {
@@ -181,7 +185,6 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
             songbird::Event::Track(TrackEvent::End),
             TrackEndNotifier {
                 handler_lock: handler_lock.clone(),
-                guild_id,
             },
         )
         .ok();
@@ -191,7 +194,6 @@ async fn play_sound(ctx: &Context, author: &Member, sound: String) -> bool {
 
 struct TrackEndNotifier {
     handler_lock: Arc<Mutex<Call>>,
-    guild_id: GuildId,
 }
 
 #[async_trait]
@@ -199,7 +201,6 @@ impl songbird::events::EventHandler for TrackEndNotifier {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         let mut handler = self.handler_lock.lock().await;
         handler.leave().await.ok();
-        CONNECTIONS.lock().await.remove(&self.guild_id);
         None
     }
 }
@@ -213,7 +214,6 @@ struct DriverDisconnectNotifier {
 impl songbird::events::EventHandler for DriverDisconnectNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::DriverDisconnect(_data) = ctx {
-            //dbg!(data);
             self.audio_handle.stop().ok();
             CONNECTIONS.lock().await.remove(&self.guild_id);
         }
