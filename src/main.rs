@@ -4,7 +4,6 @@ use std::error::Error;
 use std::sync::Arc;
 
 use dotenvy::dotenv;
-use once_cell::sync::Lazy;
 use serenity::async_trait;
 use serenity::framework::StandardFramework;
 use serenity::model::application::command::Command;
@@ -19,10 +18,12 @@ use songbird::{create_player, Call, Event, EventContext, SerenityInit, TrackEven
 use tracing::{error, info, warn};
 
 mod command_manager;
+use command_manager::CommandManager;
 
-static CONNECTIONS: Lazy<Mutex<HashSet<GuildId>>> = Lazy::new(|| Mutex::new(HashSet::new()));
-
-struct Handler;
+struct Handler {
+    connections: Arc<Mutex<HashSet<GuildId>>>,
+    commands: CommandManager,
+}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -44,15 +45,17 @@ impl EventHandler for Handler {
                         ) => {
                             play_future = Some(play_sound(
                                 &ctx,
+                                self,
                                 author,
                                 sound.as_str().unwrap_or("").into(),
+                                self.connections.clone(),
                             ));
                             ":sunglasses:".into()
                         }
                         (_, None) => {
                             "You shouldn't be here, I shouldn't be here, we both know it...".into()
                         }
-                        _ => command_manager::list_commands().await,
+                        _ => self.commands.list_commands().await,
                     }
                 }
                 _ => "i donbt know dis command uwu :(".into(),
@@ -79,14 +82,14 @@ impl EventHandler for Handler {
         if content == "brelp" || content == "bruhelp" {
             if let Err(why) = msg
                 .channel_id
-                .say(&ctx.http, command_manager::list_commands().await)
+                .say(&ctx.http, self.commands.list_commands().await)
                 .await
             {
                 warn!("Error sending message: {why:?}");
             }
         } else if let Some(guild_id) = msg.guild_id {
             if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
-                play_sound(&ctx, author, content).await;
+                play_sound(&ctx, self, author, content, self.connections.clone()).await;
             }
         }
     }
@@ -113,8 +116,17 @@ impl EventHandler for Handler {
     }
 }
 
-async fn play_sound(ctx: &Context, author: Member, sound: String) -> bool {
-    let sound_uri = command_manager::get_sound_uri(&sound).await;
+async fn play_sound(
+    ctx: &Context,
+    handler: &Handler,
+    author: Member,
+    sound: String,
+    connections: Arc<Mutex<HashSet<GuildId>>>,
+) -> bool {
+    let sound_uri = handler
+        .commands
+        .get_sound_uri(&sound.trim().to_lowercase())
+        .await;
     let sound_uri = match sound_uri {
         Some(sound_uri) => sound_uri,
         None => return false,
@@ -147,7 +159,7 @@ async fn play_sound(ctx: &Context, author: Member, sound: String) -> bool {
         .expect("Songbird Voice client placed in at initialisation")
         .clone();
 
-    if !CONNECTIONS.lock().await.insert(guild_id) {
+    if !connections.lock().await.insert(guild_id) {
         return false;
     }
 
@@ -156,7 +168,7 @@ async fn play_sound(ctx: &Context, author: Member, sound: String) -> bool {
         Ok(source) => source,
         Err(err) => {
             warn!("Err starting source: {err:?}");
-            CONNECTIONS.lock().await.remove(&guild_id);
+            connections.lock().await.remove(&guild_id);
             return false;
         }
     };
@@ -173,6 +185,7 @@ async fn play_sound(ctx: &Context, author: Member, sound: String) -> bool {
         DriverDisconnectNotifier {
             audio_handle: audio_handle.clone(),
             guild_id,
+            connections,
         },
     );
 
@@ -208,6 +221,7 @@ impl songbird::events::EventHandler for TrackEndNotifier {
 struct DriverDisconnectNotifier {
     audio_handle: TrackHandle,
     guild_id: GuildId,
+    connections: Arc<Mutex<HashSet<GuildId>>>,
 }
 
 #[async_trait]
@@ -215,7 +229,7 @@ impl songbird::events::EventHandler for DriverDisconnectNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::DriverDisconnect(_data) = ctx {
             self.audio_handle.stop().ok();
-            CONNECTIONS.lock().await.remove(&self.guild_id);
+            self.connections.lock().await.remove(&self.guild_id);
         }
         None
     }
@@ -232,14 +246,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
     env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
 
-    // Load commands and start command updater
-    command_manager::setup().await;
-
     // Build client
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(token, intents)
         .framework(StandardFramework::new())
-        .event_handler(Handler)
+        .event_handler(Handler {
+            connections: Arc::default(),
+            commands: CommandManager::new().await,
+        })
         .register_songbird()
         .await
         .expect("Error creating client");
