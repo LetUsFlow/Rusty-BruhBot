@@ -8,7 +8,6 @@ use serenity::prelude::Mutex;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-#[derive(Default)]
 pub struct CommandManager {
     commands: Arc<Mutex<HashMap<String, String>>>,
 }
@@ -33,11 +32,11 @@ struct SupabaseCommandItem {
 
 impl CommandManager {
     pub async fn new() -> Self {
-        let manager = CommandManager::default();
+        let manager = CommandManager { commands: Arc::default() };
 
         let command_data = Self::get_command_data()
             .await
-            .unwrap_or_else(|_| panic!("Could not load command data from database"));
+            .expect("Could not load command data from database");
         manager.commands.lock().await.extend(command_data);
         info!("Initially updated command data");
         tokio::spawn(Self::command_updater(manager.commands.clone()));
