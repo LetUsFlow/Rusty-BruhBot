@@ -106,7 +106,7 @@ impl CommandManager {
     async fn get_command_data() -> Result<HashMap<String, String>, reqwest::Error> {
         let mut res = HashMap::new();
 
-        let api = env::var("POCKETBASE_API").unwrap();
+        let api = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
         let source = Self::get_full_list(&api, "sounds").await?;
 
         for item in source.items {
