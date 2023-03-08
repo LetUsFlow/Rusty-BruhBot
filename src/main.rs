@@ -3,12 +3,9 @@ use std::error::Error;
 use std::sync::Arc;
 
 use dotenvy::dotenv;
-
 use serenity::framework::StandardFramework;
 use serenity::prelude::*;
-
 use songbird::SerenityInit;
-
 use tracing::{error, info};
 
 mod command_manager;

@@ -1,9 +1,11 @@
 use std::collections::HashSet;
-
 use std::sync::Arc;
 
-use serenity::model::prelude::{GuildId, Member};
-use serenity::prelude::*;
+use parking_lot::Mutex;
+use serenity::{
+    model::prelude::{GuildId, Member},
+    prelude::Context,
+};
 use songbird::{create_player, TrackEvent};
 use tracing::warn;
 
@@ -52,7 +54,7 @@ pub async fn play_sound(
         .expect("Songbird Voice client placed in at initialisation")
         .clone();
 
-    if !connections.lock().await.insert(guild_id) {
+    if !connections.lock().insert(guild_id) {
         return false;
     }
 
@@ -61,7 +63,7 @@ pub async fn play_sound(
         Ok(source) => source,
         Err(err) => {
             warn!("Err starting source: {err:?}");
-            connections.lock().await.remove(&guild_id);
+            connections.lock().remove(&guild_id);
             return false;
         }
     };

@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use songbird::tracks::TrackHandle;
-use songbird::{Call, Event, EventContext};
-
+use parking_lot::Mutex;
 use serenity::async_trait;
 use serenity::model::application::command::Command;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
@@ -11,8 +9,9 @@ use serenity::model::gateway::Ready;
 use serenity::model::prelude::command::CommandOptionType;
 use serenity::model::prelude::interaction::application_command::CommandDataOption;
 use serenity::model::prelude::{GuildId, Message};
-use serenity::prelude::*;
-
+use serenity::prelude::{Context, EventHandler};
+use songbird::tracks::TrackHandle;
+use songbird::{Call, Event, EventContext};
 use tracing::{info, warn};
 
 use crate::command_manager::CommandManager;
@@ -115,11 +114,11 @@ impl EventHandler for Handler {
 }
 
 pub struct TrackEndNotifier {
-    handler_lock: Arc<Mutex<Call>>,
+    handler_lock: Arc<serenity::prelude::Mutex<Call>>,
 }
 
 impl TrackEndNotifier {
-    pub fn new(handler_lock: Arc<Mutex<Call>>) -> Self {
+    pub fn new(handler_lock: Arc<serenity::prelude::Mutex<Call>>) -> Self {
         Self { handler_lock }
     }
 }
@@ -158,7 +157,7 @@ impl songbird::events::EventHandler for DriverDisconnectNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::DriverDisconnect(_data) = ctx {
             self.audio_handle.stop().ok();
-            self.connections.lock().await.remove(&self.guild_id);
+            self.connections.lock().remove(&self.guild_id);
         }
         None
     }
