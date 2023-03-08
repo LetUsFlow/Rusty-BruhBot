@@ -32,7 +32,9 @@ struct SupabaseCommandItem {
 
 impl CommandManager {
     pub async fn new() -> Self {
-        let manager = CommandManager { commands: Arc::default() };
+        let manager = CommandManager {
+            commands: Arc::default(),
+        };
 
         let command_data = Self::get_command_data()
             .await
