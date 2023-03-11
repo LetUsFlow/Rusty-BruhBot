@@ -1,10 +1,7 @@
-# Nightly is required until `-Z sparse-registry` is stabilized in Rust 1.68
-# https://github.com/rust-lang/cargo/issues/9069#issuecomment-1408773982
-FROM rustlang/rust:nightly-slim as build
-# FROM rust:1-slim AS build
+FROM rust:1-slim-bullseye as builder
 WORKDIR /app
 COPY . /app
-COPY --from=mwader/static-ffmpeg:5.1.2 /ffmpeg /ffmpeg
+COPY --from=mwader/static-ffmpeg:6.0 /ffmpeg /ffmpeg
 
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
@@ -15,11 +12,10 @@ RUN cargo build --release && \
     upx -1 /ffmpeg
 
 FROM gcr.io/distroless/cc:nonroot
-WORKDIR /app
 
-COPY --from=build /app/target/release/rusty-bruhbot /app/rusty-bruhbot
-COPY --from=build /ffmpeg /bin/
+COPY --from=builder /app/target/release/rusty-bruhbot /bin/
+COPY --from=builder /ffmpeg /bin/
 
 USER nonroot
 
-CMD [ "/app/rusty-bruhbot" ]
+CMD [ "rusty-bruhbot" ]
