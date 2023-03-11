@@ -81,3 +81,6 @@ The following example assumes that you have already set up and configured Pocket
 ```bash
 docker run -d --env-file .env --net=host ghcr.io/letusflow/rusty-bruhbot
 ```
+
+## License
+[ISC](LICENSE)
