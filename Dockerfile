@@ -4,6 +4,7 @@ COPY . /app
 COPY --from=mwader/static-ffmpeg:6.0 /ffmpeg /ffmpeg
 
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+ENV LIBOPUS_STATIC=true
 
 RUN apt-get update && \
     apt-get install -y upx libopus-dev cmake
