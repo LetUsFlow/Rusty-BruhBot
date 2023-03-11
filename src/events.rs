@@ -26,7 +26,6 @@ pub struct Handler {
 impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
-            let mut play_future = None;
             let content = match command.data.name.as_str() {
                 "bruh" => {
                     let cdo = command.data.options.get(0);
@@ -40,14 +39,18 @@ impl EventHandler for Handler {
                             }),
                             Some(author),
                         ) => {
-                            play_future = Some(play_sound(
+                            let play_status = play_sound(
                                 &ctx,
                                 self,
                                 author,
                                 sound.as_str().unwrap_or("").into(),
                                 self.connections.clone(),
-                            ));
-                            ":sunglasses:".into()
+                            ).await;
+
+                            match play_status {
+                                true => ":sunglasses:".into(),
+                                false => ":skull:".into()
+                            }
                         }
                         (_, None) => {
                             "You shouldn't be here, I shouldn't be here, we both know it...".into()
@@ -67,9 +70,6 @@ impl EventHandler for Handler {
                 .await
             {
                 warn!("Cannot respond to slash command: {why}");
-            }
-            if let Some(play_future) = play_future {
-                play_future.await;
             }
         }
     }
