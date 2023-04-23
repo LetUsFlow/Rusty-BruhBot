@@ -1,7 +1,7 @@
 FROM rust:1-slim-bullseye as builder
 WORKDIR /app
 COPY . /app
-COPY --from=mwader/static-ffmpeg:6.0 /ffmpeg /ffmpeg
+COPY --from=ghcr.io/ffbuilds/static-ffmpeg-minimal-alpine_edge:main /ffmpeg /ffmpeg
 
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 ENV LIBOPUS_STATIC=true
