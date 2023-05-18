@@ -50,11 +50,7 @@ impl CommandManager {
     }
 
     pub async fn list_commands(&self) -> String {
-        self.commands
-            .lock()
-            .await
-            .iter()
-            .map(|c| c.0.clone())
+        itertools::sorted(self.commands.lock().await.iter().map(|c| c.0.clone()))
             .collect::<Vec<String>>()
             .join(", ")
     }

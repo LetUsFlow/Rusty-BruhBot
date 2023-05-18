@@ -45,11 +45,12 @@ impl EventHandler for Handler {
                                 author,
                                 sound.as_str().unwrap_or("").into(),
                                 self.connections.clone(),
-                            ).await;
+                            )
+                            .await;
 
                             match play_status {
                                 true => ":sunglasses:".into(),
-                                false => ":skull:".into()
+                                false => ":skull:".into(),
                             }
                         }
                         (_, None) => {
