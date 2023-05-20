@@ -3,13 +3,14 @@ use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
 
 use async_recursion::async_recursion;
+use rand::seq::SliceRandom;
 use serde::Deserialize;
 use serenity::prelude::Mutex;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
 pub struct CommandManager {
-    commands: Arc<Mutex<HashMap<String, String>>>,
+    commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
 
 #[allow(non_snake_case)]
@@ -46,7 +47,13 @@ impl CommandManager {
     }
 
     pub async fn get_sound_uri(&self, sound: &String) -> Option<String> {
-        self.commands.lock().await.get(sound).cloned()
+        let choices = self.commands.lock().await.get(sound).cloned();
+        match choices {
+            Some(choices) => {
+                choices.choose(&mut rand::thread_rng()).cloned()
+            },
+            None => None,
+        }
     }
 
     pub async fn list_commands(&self) -> String {
@@ -107,25 +114,35 @@ impl CommandManager {
         Ok(res)
     }
 
-    async fn get_command_data() -> Result<HashMap<String, String>, reqwest::Error> {
-        let mut res = HashMap::new();
+    async fn get_command_data() -> Result<HashMap<String, Vec<String>>, reqwest::Error> {
+        let mut res: HashMap<String, Vec<String>> = HashMap::new();
 
         let api = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
         let source = Self::get_full_list(&api, "sounds").await?;
 
         for item in source.items {
-            res.insert(
-                item.command,
-                format!(
-                    "{api}/api/files/{}/{}/{}",
-                    item.collectionId, item.id, item.audio
-                ),
-            );
+            match res.get_mut(&item.command) {
+                Some(urls) => {
+                    urls.push(format!(
+                        "{api}/api/files/{}/{}/{}",
+                        item.collectionId, item.id, item.audio
+                    ));
+                },
+                None => {
+                    res.insert(
+                        item.command,
+                        vec![format!(
+                            "{api}/api/files/{}/{}/{}",
+                            item.collectionId, item.id, item.audio
+                        )],
+                    );
+                    },
+            }
         }
         Ok(res)
     }
 
-    async fn command_updater(commands: Arc<Mutex<HashMap<String, String>>>) {
+    async fn command_updater(commands: Arc<Mutex<HashMap<String, Vec<String>>>>) {
         loop {
             sleep(Duration::from_secs(600)).await;
             let command_data = Self::get_command_data().await;
