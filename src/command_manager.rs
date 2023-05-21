@@ -23,7 +23,7 @@ struct SupabaseCommandsList {
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct SupabaseCommandItem {
     collectionId: String,
     command: String,
@@ -47,11 +47,9 @@ impl CommandManager {
     }
 
     pub async fn get_sound_uri(&self, sound: &String) -> Option<String> {
-        let choices = self.commands.lock().await.get(sound).cloned();
-        match choices {
-            Some(choices) => {
-                choices.choose(&mut rand::thread_rng()).cloned()
-            },
+        let choices = self.commands.lock().await;
+        match choices.get(sound) {
+            Some(choices) => choices.choose(&mut rand::thread_rng()).cloned(),
             None => None,
         }
     }
@@ -123,29 +121,32 @@ impl CommandManager {
         for item in source.items {
             match res.get_mut(&item.command) {
                 Some(urls) => {
-                    urls.push(format!(
-                        "{api}/api/files/{}/{}/{}",
-                        item.collectionId, item.id, item.audio
-                    ));
-                },
+                    urls.push(Self::format_api_url(&item, &api));
+                }
                 None => {
                     res.insert(
-                        item.command,
-                        vec![format!(
-                            "{api}/api/files/{}/{}/{}",
-                            item.collectionId, item.id, item.audio
-                        )],
+                        item.clone().command,
+                        vec![Self::format_api_url(&item, &api)],
                     );
-                    },
+                }
             }
         }
+
         Ok(res)
+    }
+
+    fn format_api_url(item: &SupabaseCommandItem, api: &String) -> String {
+        format!(
+            "{api}/api/files/{}/{}/{}",
+            item.collectionId, item.id, item.audio
+        )
     }
 
     async fn command_updater(commands: Arc<Mutex<HashMap<String, Vec<String>>>>) {
         loop {
             sleep(Duration::from_secs(600)).await;
-            let command_data = Self::get_command_data().await;
+            let command_data: Result<HashMap<String, Vec<String>>, reqwest::Error> =
+                Self::get_command_data().await;
 
             match command_data {
                 Ok(data) => {
