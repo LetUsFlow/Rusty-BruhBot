@@ -29,12 +29,12 @@ Rusty-BruhBot uses [PocketBase](https://pocketbase.io/) to store commands an sou
                 "type": "file",
                 "system": false,
                 "required": true,
-                "unique": false,
                 "options": {
                     "maxSelect": 1,
                     "maxSize": 5242880,
                     "mimeTypes": [],
-                    "thumbs": []
+                    "thumbs": [],
+                    "protected": false
                 }
             },
             {
@@ -43,7 +43,6 @@ Rusty-BruhBot uses [PocketBase](https://pocketbase.io/) to store commands an sou
                 "type": "text",
                 "system": false,
                 "required": true,
-                "unique": true,
                 "options": {
                     "min": null,
                     "max": null,
@@ -51,6 +50,7 @@ Rusty-BruhBot uses [PocketBase](https://pocketbase.io/) to store commands an sou
                 }
             }
         ],
+        "indexes": [],
         "listRule": "",
         "viewRule": "",
         "createRule": null,
