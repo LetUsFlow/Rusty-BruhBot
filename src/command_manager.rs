@@ -46,12 +46,12 @@ impl CommandManager {
         manager
     }
 
-    pub async fn get_sound_uri(&self, sound: &String) -> Option<String> {
-        let choices = self.commands.lock().await;
-        match choices.get(sound) {
-            Some(choices) => choices.choose(&mut rand::thread_rng()).cloned(),
-            None => None,
-        }
+    pub async fn get_sound_uri(&self, sound: &str) -> Option<String> {
+        self.commands
+            .lock()
+            .await
+            .get(sound)
+            .and_then(|choices| choices.choose(&mut rand::thread_rng()).cloned())
     }
 
     pub async fn list_commands(&self) -> String {
