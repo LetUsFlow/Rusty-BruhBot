@@ -1,10 +1,6 @@
-use std::env;
-use std::error::Error;
-use std::sync::Arc;
-
+use std::{env, sync::Arc};
 use dotenvy::dotenv;
-use serenity::framework::StandardFramework;
-use serenity::prelude::*;
+use serenity::{framework::StandardFramework, prelude::*};
 use songbird::SerenityInit;
 use tracing::{error, info};
 
@@ -13,7 +9,7 @@ mod events;
 mod player;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
     dotenv().ok();
 
     // Enable logging
@@ -41,6 +37,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::signal::ctrl_c().await.ok();
     info!("Received Ctrl-C, shutting down.");
-
-    Ok(())
 }
