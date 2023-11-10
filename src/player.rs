@@ -13,7 +13,7 @@ use crate::events::*;
 
 pub async fn play_sound(
     ctx: &Context,
-    handler: &Handler,
+    handler: &DiscordHandler,
     author: Member,
     sound: String,
     connections: Arc<Mutex<HashSet<GuildId>>>,

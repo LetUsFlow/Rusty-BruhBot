@@ -22,7 +22,7 @@ async fn main() {
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(token, intents)
         .framework(StandardFramework::new())
-        .event_handler(events::Handler {
+        .event_handler(events::DiscordHandler {
             connections: Arc::default(),
             commands: command_manager::CommandManager::new().await,
         })

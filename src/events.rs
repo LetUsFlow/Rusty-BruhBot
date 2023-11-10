@@ -17,13 +17,51 @@ use tracing::{info, warn};
 use crate::command_manager::CommandManager;
 use crate::player::play_sound;
 
-pub struct Handler {
+pub struct DiscordHandler {
     pub connections: Arc<Mutex<HashSet<GuildId>>>,
     pub commands: CommandManager,
 }
 
 #[async_trait]
-impl EventHandler for Handler {
+impl EventHandler for DiscordHandler {
+    async fn message(&self, ctx: Context, msg: Message) {
+        let content = msg.content.trim().to_lowercase();
+        if content == "brelp" || content == "bruhelp" {
+            if let Err(why) = msg
+                .channel_id
+                .say(&ctx.http, self.commands.list_commands().await)
+                .await
+            {
+                warn!("Error sending message: {why:?}");
+            }
+        } else if let Some(guild_id) = msg.guild_id {
+            if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
+                play_sound(&ctx, self, author, content, self.connections.clone()).await;
+            }
+        }
+    }
+
+    async fn ready(&self, ctx: Context, ready: Ready) {
+        info!("{} is connected!", ready.user.name);
+
+        Command::set_global_application_commands(&ctx.http, |commands| {
+            commands.create_application_command(|command| {
+                // Enable autocomplete for all sounds
+                command
+                    .name("bruh")
+                    .description("Play a sound")
+                    .create_option(|option| {
+                        option
+                            .name("sound")
+                            .description("Name of sound")
+                            .kind(CommandOptionType::String)
+                    })
+            })
+        })
+        .await
+        .ok();
+    }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             let content = match command.data.name.as_str() {
@@ -73,44 +111,6 @@ impl EventHandler for Handler {
                 warn!("Cannot respond to slash command: {why}");
             }
         }
-    }
-
-    async fn message(&self, ctx: Context, msg: Message) {
-        let content = msg.content.trim().to_lowercase();
-        if content == "brelp" || content == "bruhelp" {
-            if let Err(why) = msg
-                .channel_id
-                .say(&ctx.http, self.commands.list_commands().await)
-                .await
-            {
-                warn!("Error sending message: {why:?}");
-            }
-        } else if let Some(guild_id) = msg.guild_id {
-            if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
-                play_sound(&ctx, self, author, content, self.connections.clone()).await;
-            }
-        }
-    }
-
-    async fn ready(&self, ctx: Context, ready: Ready) {
-        info!("{} is connected!", ready.user.name);
-
-        Command::set_global_application_commands(&ctx.http, |commands| {
-            commands.create_application_command(|command| {
-                // Enable autocomplete for all sounds
-                command
-                    .name("bruh")
-                    .description("Play a sound")
-                    .create_option(|option| {
-                        option
-                            .name("sound")
-                            .description("Name of sound")
-                            .kind(CommandOptionType::String)
-                    })
-            })
-        })
-        .await
-        .ok();
     }
 }
 
