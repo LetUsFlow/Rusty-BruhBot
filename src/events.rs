@@ -2,12 +2,15 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use serenity::all::CommandDataOptionValue;
 use serenity::async_trait;
-use serenity::model::application::command::Command;
-use serenity::model::application::interaction::{Interaction, InteractionResponseType};
+use serenity::builder::{
+    CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
+};
+use serenity::model::application::CommandDataOption;
+use serenity::model::application::Interaction;
+use serenity::model::application::{Command, CommandOptionType};
 use serenity::model::gateway::Ready;
-use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::interaction::application_command::CommandDataOption;
 use serenity::model::prelude::{GuildId, Message};
 use serenity::prelude::{Context, EventHandler};
 use songbird::tracks::TrackHandle;
@@ -25,6 +28,7 @@ pub struct DiscordHandler {
 #[async_trait]
 impl EventHandler for DiscordHandler {
     async fn message(&self, ctx: Context, msg: Message) {
+        let author_id = msg.author.id;
         let content = msg.content.trim().to_lowercase();
         if content == "brelp" || content == "bruhelp" {
             if let Err(why) = msg
@@ -35,44 +39,45 @@ impl EventHandler for DiscordHandler {
                 warn!("Error sending message: {why:?}");
             }
         } else if let Some(guild_id) = msg.guild_id {
-            if let Some(author) = ctx.cache.member(guild_id, msg.author.id) {
-                play_sound(&ctx, self, author, content, self.connections.clone()).await;
-            }
+            play_sound(
+                &ctx,
+                self,
+                guild_id,
+                author_id,
+                content,
+                self.connections.clone(),
+            )
+            .await;
         }
     }
 
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
 
-        Command::set_global_application_commands(&ctx.http, |commands| {
-            commands.create_application_command(|command| {
-                // Enable autocomplete for all sounds
-                command
-                    .name("bruh")
-                    .description("Play a sound")
-                    .create_option(|option| {
-                        option
-                            .name("sound")
-                            .description("Name of sound")
-                            .kind(CommandOptionType::String)
-                    })
-            })
-        })
+        Command::create_global_command(
+            &ctx.http,
+            CreateCommand::new("bruh")
+                .description("Play a sound")
+                .add_option(CreateCommandOption::new(
+                    CommandOptionType::String,
+                    "sound",
+                    "Name of sound",
+                )),
+        )
         .await
         .ok();
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::ApplicationCommand(command) = interaction {
+        if let Interaction::Command(command) = interaction {
             let content = match command.data.name.as_str() {
                 "bruh" => {
                     let cdo = command.data.options.get(0);
-                    let author = command.member.clone();
 
-                    match (cdo, author) {
+                    match (cdo, command.member.clone()) {
                         (
                             Some(CommandDataOption {
-                                value: Some(ref sound),
+                                value: CommandDataOptionValue::String(sound),
                                 ..
                             }),
                             Some(author),
@@ -80,8 +85,9 @@ impl EventHandler for DiscordHandler {
                             let play_status = play_sound(
                                 &ctx,
                                 self,
-                                author,
-                                sound.as_str().unwrap_or("").into(),
+                                author.guild_id,
+                                author.user.id,
+                                sound.to_string(),
                                 self.connections.clone(),
                             )
                             .await;
@@ -100,12 +106,10 @@ impl EventHandler for DiscordHandler {
                 _ => "i donbt know dis command uwu :(".into(),
             };
 
+            let data = CreateInteractionResponseMessage::new().content(content);
+
             if let Err(why) = command
-                .create_interaction_response(&ctx.http, |response| {
-                    response
-                        .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|message| message.content(content))
-                })
+                .create_response(&ctx.http, CreateInteractionResponse::Message(data))
                 .await
             {
                 warn!("Cannot respond to slash command: {why}");

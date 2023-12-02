@@ -2,11 +2,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use serenity::{
-    model::prelude::{GuildId, Member},
-    prelude::Context,
-};
-use songbird::{create_player, TrackEvent};
+use reqwest::Client as HttpClient;
+use serenity::all::UserId;
+use serenity::{model::prelude::GuildId, prelude::Context};
+use songbird::{input::HttpRequest, tracks::Track, TrackEvent};
 use tracing::warn;
 
 use crate::events::*;
@@ -14,7 +13,8 @@ use crate::events::*;
 pub async fn play_sound(
     ctx: &Context,
     handler: &DiscordHandler,
-    author: Member,
+    guild_id: GuildId,
+    author_id: UserId,
     sound: String,
     connections: Arc<Mutex<HashSet<GuildId>>>,
 ) -> bool {
@@ -27,19 +27,20 @@ pub async fn play_sound(
         None => return false,
     };
 
-    let guild = match ctx.cache.guild(author.guild_id) {
-        Some(guild) => guild,
-        None => {
-            warn!("Cannot find guild in cache: {}", author.guild_id);
-            return false;
-        }
-    };
-    let guild_id = author.guild_id;
+    let channel_id = {
+        let guild = match ctx.cache.guild(guild_id) {
+            Some(guild) => guild,
+            None => {
+                warn!("Cannot find guild in cache: {}", guild_id);
+                return false;
+            }
+        };
 
-    let channel_id = guild
-        .voice_states
-        .get(&author.user.id)
-        .and_then(|voice_state| voice_state.channel_id);
+        guild
+            .voice_states
+            .get(&author_id)
+            .and_then(|voice_state| voice_state.channel_id)
+    };
 
     let connect_to = match channel_id {
         Some(channel) => channel,
@@ -59,37 +60,34 @@ pub async fn play_sound(
     }
 
     // Create audio source
-    let source = match songbird::ffmpeg(sound_uri).await {
-        Ok(source) => source,
-        Err(err) => {
-            warn!("Err starting source: {err:?}");
-            connections.lock().remove(&guild_id);
-            return false;
-        }
-    };
+    let source = HttpRequest::new(HttpClient::new(), sound_uri);
 
     // Create audio handler
-    let (audio, audio_handle) = create_player(source);
+    let audio = Track::from(source);
 
-    let (handler_lock, _join_result) = manager.join(guild_id, connect_to).await;
-    let mut handler = handler_lock.lock().await;
+    if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
+        let mut handler = handler_lock.lock().await;
 
-    // Add disconnect eventlistener
-    handler.add_global_event(
-        songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
-        DriverDisconnectNotifier::new(audio_handle.clone(), guild_id, connections),
-    );
+        // Start playing audio
+        let audio_handle = handler.play_only(audio);
 
-    // Start playing audio
-    handler.play_only(audio);
+        // Add disconnect eventlistener
+        handler.add_global_event(
+            songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
+            DriverDisconnectNotifier::new(audio_handle.clone(), guild_id, connections),
+        );
 
-    // Add track end eventlistener
-    audio_handle
-        .add_event(
-            songbird::Event::Track(TrackEvent::End),
-            TrackEndNotifier::new(handler_lock.clone()),
-        )
-        .ok();
+        // Add track end eventlistener
+        audio_handle
+            .add_event(
+                songbird::Event::Track(TrackEvent::End),
+                TrackEndNotifier::new(handler_lock.clone()),
+            )
+            .ok();
 
-    true
+        true
+    } else {
+        connections.lock().remove(&guild_id);
+        false
+    }
 }
