@@ -3,16 +3,12 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use reqwest::Client as HttpClient;
-use serenity::{
-    model::prelude::GuildId,
-    prelude::Context,
-};
 use serenity::all::UserId;
-use songbird::{input::HttpRequest, TrackEvent, tracks::Track};
+use serenity::{model::prelude::GuildId, prelude::Context};
+use songbird::{input::HttpRequest, tracks::Track, TrackEvent};
 use tracing::warn;
 
 use crate::events::*;
-
 
 pub async fn play_sound(
     ctx: &Context,
@@ -62,7 +58,6 @@ pub async fn play_sound(
     if !connections.lock().insert(guild_id) {
         return false;
     }
-
 
     // Create audio source
     let source = HttpRequest::new(HttpClient::new(), sound_uri);

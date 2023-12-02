@@ -1,7 +1,7 @@
-use std::{env, sync::Arc};
 use dotenvy::dotenv;
 use serenity::{framework::StandardFramework, prelude::*};
 use songbird::SerenityInit;
+use std::{env, sync::Arc};
 use tracing::{error, info};
 
 mod command_manager;
