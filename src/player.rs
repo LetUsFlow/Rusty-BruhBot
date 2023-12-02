@@ -2,19 +2,21 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use reqwest::Client as HttpClient;
 use serenity::{
     model::prelude::{GuildId, Member},
     prelude::Context,
 };
-use songbird::{create_player, TrackEvent};
+use songbird::{input::HttpRequest, TrackEvent, tracks::Track};
 use tracing::warn;
 
 use crate::events::*;
 
+
 pub async fn play_sound(
     ctx: &Context,
     handler: &DiscordHandler,
-    author: Member,
+    author: Box<Member>,
     sound: String,
     connections: Arc<Mutex<HashSet<GuildId>>>,
 ) -> bool {
@@ -58,38 +60,36 @@ pub async fn play_sound(
         return false;
     }
 
+
     // Create audio source
-    let source = match songbird::ffmpeg(sound_uri).await {
-        Ok(source) => source,
-        Err(err) => {
-            warn!("Err starting source: {err:?}");
-            connections.lock().remove(&guild_id);
-            return false;
-        }
-    };
+    let source = HttpRequest::new(HttpClient::new(), sound_uri);
 
     // Create audio handler
-    let (audio, audio_handle) = create_player(source);
+    let audio = Track::from(source);
 
-    let (handler_lock, _join_result) = manager.join(guild_id, connect_to).await;
-    let mut handler = handler_lock.lock().await;
+    if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
+        let mut handler = handler_lock.lock().await;
 
-    // Add disconnect eventlistener
-    handler.add_global_event(
-        songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
-        DriverDisconnectNotifier::new(audio_handle.clone(), guild_id, connections),
-    );
+        // Start playing audio
+        let audio_handle = handler.play_only(audio);
 
-    // Start playing audio
-    handler.play_only(audio);
+        // Add disconnect eventlistener
+        handler.add_global_event(
+            songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
+            DriverDisconnectNotifier::new(audio_handle.clone(), guild_id, connections),
+        );
 
-    // Add track end eventlistener
-    audio_handle
-        .add_event(
-            songbird::Event::Track(TrackEvent::End),
-            TrackEndNotifier::new(handler_lock.clone()),
-        )
-        .ok();
+        // Add track end eventlistener
+        audio_handle
+            .add_event(
+                songbird::Event::Track(TrackEvent::End),
+                TrackEndNotifier::new(handler_lock.clone()),
+            )
+            .ok();
 
-    true
+        true
+    } else {
+        connections.lock().remove(&guild_id);
+        false
+    }
 }
