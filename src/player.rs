@@ -4,9 +4,10 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use reqwest::Client as HttpClient;
 use serenity::{
-    model::prelude::{GuildId, Member},
+    model::prelude::GuildId,
     prelude::Context,
 };
+use serenity::all::UserId;
 use songbird::{input::HttpRequest, TrackEvent, tracks::Track};
 use tracing::warn;
 
@@ -16,7 +17,8 @@ use crate::events::*;
 pub async fn play_sound(
     ctx: &Context,
     handler: &DiscordHandler,
-    author: Box<Member>,
+    guild_id: GuildId,
+    author_id: UserId,
     sound: String,
     connections: Arc<Mutex<HashSet<GuildId>>>,
 ) -> bool {
@@ -29,19 +31,20 @@ pub async fn play_sound(
         None => return false,
     };
 
-    let guild = match ctx.cache.guild(author.guild_id) {
-        Some(guild) => guild,
-        None => {
-            warn!("Cannot find guild in cache: {}", author.guild_id);
-            return false;
-        }
-    };
-    let guild_id = author.guild_id;
+    let channel_id = {
+        let guild = match ctx.cache.guild(guild_id) {
+            Some(guild) => guild,
+            None => {
+                warn!("Cannot find guild in cache: {}", guild_id);
+                return false;
+            }
+        };
 
-    let channel_id = guild
-        .voice_states
-        .get(&author.user.id)
-        .and_then(|voice_state| voice_state.channel_id);
+        guild
+            .voice_states
+            .get(&author_id)
+            .and_then(|voice_state| voice_state.channel_id)
+    };
 
     let connect_to = match channel_id {
         Some(channel) => channel,

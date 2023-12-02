@@ -26,6 +26,7 @@ pub struct DiscordHandler {
 #[async_trait]
 impl EventHandler for DiscordHandler {
     async fn message(&self, ctx: Context, msg: Message) {
+        let author_id = msg.author.id;
         let content = msg.content.trim().to_lowercase();
         if content == "brelp" || content == "bruhelp" {
             if let Err(why) = msg
@@ -35,11 +36,12 @@ impl EventHandler for DiscordHandler {
             {
                 warn!("Error sending message: {why:?}");
             }
-        } else if let Ok(author) = msg.member(&ctx.http).await {
+        } else if let Some(guild_id) = msg.guild_id {
             play_sound(
                 &ctx,
                 self,
-                Box::new(author),
+                guild_id,
+                author_id,
                 content,
                 self.connections.clone(),
             )
@@ -81,7 +83,8 @@ impl EventHandler for DiscordHandler {
                             let play_status = play_sound(
                                 &ctx,
                                 self,
-                                author,
+                                author.guild_id,
+                                author.user.id,
                                 sound.to_string(),
                                 self.connections.clone(),
                             )
