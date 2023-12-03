@@ -1,6 +1,4 @@
-use std::env;
-use std::time::Duration;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc, time::Duration};
 
 use async_recursion::async_recursion;
 use rand::seq::SliceRandom;

@@ -1,10 +1,8 @@
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use parking_lot::Mutex;
 use reqwest::Client as HttpClient;
-use serenity::all::UserId;
-use serenity::{model::prelude::GuildId, prelude::Context};
+use serenity::{all::UserId, model::prelude::GuildId, prelude::Context};
 use songbird::{input::HttpRequest, tracks::Track, TrackEvent};
 use tracing::warn;
 

@@ -1,20 +1,21 @@
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use parking_lot::Mutex;
-use serenity::all::CommandDataOptionValue;
-use serenity::async_trait;
-use serenity::builder::{
-    CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
+use serenity::{
+    all::CommandDataOptionValue,
+    async_trait,
+    builder::{
+        CreateCommand, CreateCommandOption, CreateInteractionResponse,
+        CreateInteractionResponseMessage,
+    },
+    model::{
+        application::{Command, CommandDataOption, CommandOptionType, Interaction},
+        gateway::Ready,
+        prelude::{GuildId, Message},
+    },
+    prelude::Context,
 };
-use serenity::model::application::CommandDataOption;
-use serenity::model::application::Interaction;
-use serenity::model::application::{Command, CommandOptionType};
-use serenity::model::gateway::Ready;
-use serenity::model::prelude::{GuildId, Message};
-use serenity::prelude::{Context, EventHandler};
-use songbird::tracks::TrackHandle;
-use songbird::{Call, Event, EventContext};
+use songbird::{tracks::TrackHandle, Call, Event, EventContext};
 use tracing::{info, warn};
 
 use crate::command_manager::CommandManager;
@@ -26,7 +27,7 @@ pub struct DiscordHandler {
 }
 
 #[async_trait]
-impl EventHandler for DiscordHandler {
+impl serenity::prelude::EventHandler for DiscordHandler {
     async fn message(&self, ctx: Context, msg: Message) {
         let author_id = msg.author.id;
         let content = msg.content.trim().to_lowercase();
