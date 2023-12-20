@@ -103,7 +103,7 @@ impl CommandManager {
 
         res.items.append(&mut current.items);
 
-        if res.items.len() < res.totalItems {
+        if res.items.len() == current.perPage {
             return Self::request(api, collection, res, page + 1).await;
         }
 
