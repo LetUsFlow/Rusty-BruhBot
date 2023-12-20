@@ -136,7 +136,7 @@ impl CommandManager {
 
     async fn command_updater(commands: Arc<Mutex<HashMap<String, Vec<String>>>>) {
         loop {
-            sleep(Duration::from_secs(600)).await;
+            sleep(Duration::from_secs(20)).await;
             let command_data: Result<HashMap<String, Vec<String>>, reqwest::Error> =
                 Self::get_command_data().await;
 
