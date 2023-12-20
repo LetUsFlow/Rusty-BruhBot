@@ -14,9 +14,7 @@ pub struct CommandManager {
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug, Default)]
 struct SupabaseCommandsList {
-    page: usize,
     perPage: usize,
-    totalItems: usize,
     items: Vec<SupabaseCommandItem>,
 }
 
@@ -83,12 +81,8 @@ impl CommandManager {
         api: &String,
         collection: &str,
     ) -> Result<SupabaseCommandsList, reqwest::Error> {
-        let mut res = Self::request(api, collection, SupabaseCommandsList::default(), 1).await?;
-
-        res.page = 1;
-        res.totalItems = res.items.len();
-        res.perPage = res.items.len();
-
+        let mut res = SupabaseCommandsList::default();
+        Self::request(api, collection, &mut res, 1).await?;
         Ok(res)
     }
 
@@ -96,9 +90,9 @@ impl CommandManager {
     async fn request(
         api: &String,
         collection: &str,
-        mut res: SupabaseCommandsList,
+        res: &mut SupabaseCommandsList,
         page: usize,
-    ) -> Result<SupabaseCommandsList, reqwest::Error> {
+    ) -> Result<(), reqwest::Error> {
         let mut current = Self::get_list(api, collection, page, 100).await?;
 
         res.items.append(&mut current.items);
@@ -107,7 +101,7 @@ impl CommandManager {
             return Self::request(api, collection, res, page + 1).await;
         }
 
-        Ok(res)
+        Ok(())
     }
 
     async fn get_command_data() -> Result<HashMap<String, Vec<String>>, reqwest::Error> {
