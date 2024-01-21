@@ -7,6 +7,7 @@ use serenity::prelude::Mutex;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
+#[derive(Default)]
 pub struct CommandManager {
     commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
@@ -29,9 +30,7 @@ struct SupabaseCommandItem {
 
 impl CommandManager {
     pub async fn new() -> Self {
-        let manager = CommandManager {
-            commands: Arc::default(),
-        };
+        let manager = CommandManager::default();
 
         let command_data = Self::get_command_data()
             .await
