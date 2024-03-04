@@ -1,5 +1,5 @@
 use dotenvy::dotenv;
-use serenity::{framework::StandardFramework, prelude::*};
+use serenity::prelude::*;
 use songbird::SerenityInit;
 use std::{env, sync::Arc};
 use tracing::{error, info};
@@ -21,7 +21,6 @@ async fn main() {
     // Build client
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(token, intents)
-        .framework(StandardFramework::new())
         .event_handler(events::DiscordHandler {
             connections: Arc::default(),
             commands: command_manager::CommandManager::new().await,
