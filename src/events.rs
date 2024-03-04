@@ -73,7 +73,7 @@ impl serenity::prelude::EventHandler for DiscordHandler {
         if let Interaction::Command(command) = interaction {
             let content = match command.data.name.as_str() {
                 "bruh" => {
-                    let cdo = command.data.options.get(0);
+                    let cdo = command.data.options.first();
 
                     match (cdo, command.member.clone()) {
                         (
