@@ -9,7 +9,7 @@ use tracing::{info, warn};
 
 #[derive(Default)]
 pub struct CommandManager {
-    commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    pub commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
 
 #[allow(non_snake_case)]
@@ -32,12 +32,9 @@ impl CommandManager {
     pub async fn new() -> Self {
         let manager = CommandManager::default();
 
-        let command_data = Self::get_command_data()
-            .await
-            .expect("Could not load command data from database");
-        manager.commands.lock().await.extend(command_data);
         info!("Initially updated command data");
         tokio::spawn(Self::command_updater(manager.commands.clone()));
+        info!("Started command data updater task");
         manager
     }
 
@@ -135,7 +132,6 @@ impl CommandManager {
 
     async fn command_updater(commands: Arc<Mutex<HashMap<String, Vec<String>>>>) {
         loop {
-            sleep(Duration::from_secs(20)).await;
             let command_data: Result<HashMap<String, Vec<String>>, reqwest::Error> =
                 Self::get_command_data().await;
 
@@ -148,6 +144,7 @@ impl CommandManager {
                     warn!("Failed updating command data: {err}");
                 }
             }
+            sleep(Duration::from_secs(20)).await;
         }
     }
 }
