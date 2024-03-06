@@ -32,7 +32,6 @@ impl CommandManager {
     pub async fn new() -> Self {
         let manager = CommandManager::default();
 
-        info!("Initially updated command data");
         tokio::spawn(Self::command_updater(manager.commands.clone()));
         info!("Started command data updater task");
         manager
