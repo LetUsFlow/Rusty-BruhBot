@@ -136,11 +136,25 @@ impl serenity::prelude::EventHandler for DiscordHandler {
             }
             Interaction::Autocomplete(autocomplete) => {
                 println!("{:?}", autocomplete.data.options[0].value);
+                let command_text = autocomplete.data.options[0].value.as_str().unwrap();
 
-                let response = CreateAutocompleteResponse::new().set_choices(vec![
-                    AutocompleteChoice::new("bruh", "bruh"),
-                    AutocompleteChoice::new("fbi", "fbi"),
-                ]); // TODO: use actual command data
+                let responses = self
+                    .commands
+                    .commands
+                    .lock()
+                    .await
+                    .keys()
+                    .cloned()
+                    .filter(|cmd| cmd.starts_with(command_text))
+                    .take(25)
+                    .collect::<Vec<String>>();
+
+                let response = CreateAutocompleteResponse::new().set_choices(
+                    responses
+                        .iter()
+                        .map(|cmd| AutocompleteChoice::new(cmd.clone(), cmd.clone()))
+                        .collect(),
+                );
 
                 if let Err(why) = autocomplete
                     .create_response(&ctx.http, CreateInteractionResponse::Autocomplete(response))
