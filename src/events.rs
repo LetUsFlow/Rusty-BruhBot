@@ -57,6 +57,19 @@ impl serenity::prelude::EventHandler for DiscordHandler {
 
         Command::create_global_command(
             &ctx.http,
+            CreateCommand::new("bruhelp").description("BruhBot Help"),
+        )
+        .await
+        .expect("Created global bruhelp command");
+        Command::create_global_command(
+            &ctx.http,
+            CreateCommand::new("brelp").description("BruhBot Help"),
+        )
+        .await
+        .expect("Created global brelp command");
+
+        Command::create_global_command(
+            &ctx.http,
             CreateCommand::new("bruh")
                 .description("Play a sound")
                 .add_option(CreateCommandOption::new(
@@ -66,7 +79,7 @@ impl serenity::prelude::EventHandler for DiscordHandler {
                 )),
         )
         .await
-        .ok();
+        .expect("Created global bruh command");
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -103,6 +116,9 @@ impl serenity::prelude::EventHandler for DiscordHandler {
                         }
                         _ => self.commands.list_commands().await,
                     }
+                }
+                "bruhelp" | "brelp" => {
+                    self.commands.list_commands().await
                 }
                 _ => "i donbt know dis command uwu :(".into(),
             };
