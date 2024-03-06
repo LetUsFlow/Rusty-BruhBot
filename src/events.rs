@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use parking_lot::Mutex;
 use serenity::{
-    all::CommandDataOptionValue,
+    all::{AutocompleteChoice, CommandDataOptionValue, CreateAutocompleteResponse},
     async_trait,
     builder::{
         CreateCommand, CreateCommandOption, CreateInteractionResponse,
@@ -72,65 +72,84 @@ impl serenity::prelude::EventHandler for DiscordHandler {
             &ctx.http,
             CreateCommand::new("bruh")
                 .description("Play a sound")
-                .add_option(CreateCommandOption::new(
-                    CommandOptionType::String,
-                    "sound",
-                    "Name of sound",
-                )),
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::String, "sound", "Name of sound")
+                        .set_autocomplete(true)
+                        .required(true),
+                ),
         )
         .await
         .expect("Created global bruh command");
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::Command(command) = interaction {
-            let content = match command.data.name.as_str() {
-                "bruh" => {
-                    let cdo = command.data.options.first();
+        match interaction {
+            Interaction::Command(command) => {
+                let content = match command.data.name.as_str() {
+                    "bruh" => {
+                        let cdo = command.data.options.first();
 
-                    match (cdo, command.member.clone()) {
-                        (
-                            Some(CommandDataOption {
-                                value: CommandDataOptionValue::String(sound),
-                                ..
-                            }),
-                            Some(author),
-                        ) => {
-                            let play_status = play_sound(
-                                &ctx,
-                                self,
-                                author.guild_id,
-                                author.user.id,
-                                sound.to_string(),
-                                self.connections.clone(),
-                            )
-                            .await;
+                        match (cdo, command.member.clone()) {
+                            (
+                                Some(CommandDataOption {
+                                    value: CommandDataOptionValue::String(sound),
+                                    ..
+                                }),
+                                Some(author),
+                            ) => {
+                                // command in guild
+                                let play_status = play_sound(
+                                    &ctx,
+                                    self,
+                                    author.guild_id,
+                                    author.user.id,
+                                    sound.to_string(),
+                                    self.connections.clone(),
+                                )
+                                .await;
 
-                            match play_status {
-                                true => ":sunglasses:".into(),
-                                false => ":skull:".into(),
+                                match play_status {
+                                    true => ":sunglasses:".into(),
+                                    false => ":skull:".into(),
+                                }
                             }
+                            (_, None) => {
+                                // command in dms
+                                "You shouldn't be here, I shouldn't be here, we both know it..."
+                                    .into()
+                            }
+                            _ => self.commands.list_commands().await,
                         }
-                        (_, None) => {
-                            "You shouldn't be here, I shouldn't be here, we both know it...".into()
-                        }
-                        _ => self.commands.list_commands().await,
                     }
-                }
-                "bruhelp" | "brelp" => {
-                    self.commands.list_commands().await
-                }
-                _ => "i donbt know dis command uwu :(".into(),
-            };
+                    "bruhelp" | "brelp" => self.commands.list_commands().await,
+                    _ => "i donbt know dis command uwu :(".into(),
+                };
 
-            let data = CreateInteractionResponseMessage::new().content(content);
+                let data = CreateInteractionResponseMessage::new().content(content);
 
-            if let Err(why) = command
-                .create_response(&ctx.http, CreateInteractionResponse::Message(data))
-                .await
-            {
-                warn!("Cannot respond to slash command: {why}");
+                if let Err(why) = command
+                    .create_response(&ctx.http, CreateInteractionResponse::Message(data))
+                    .await
+                {
+                    warn!("Cannot respond to slash command: {why}");
+                }
             }
+            Interaction::Autocomplete(autocomplete) => {
+                println!("{:?}", autocomplete.data.options[0].value);
+
+                let response = CreateAutocompleteResponse::new().set_choices(vec![
+                    AutocompleteChoice::new("bruh", "bruh"),
+                    AutocompleteChoice::new("fbi", "fbi"),
+                ]); // TODO: use actual command data
+
+                if let Err(why) = autocomplete
+                    .create_response(&ctx.http, CreateInteractionResponse::Autocomplete(response))
+                    .await
+                {
+                    warn!("Cannot respond to slash command: {why}");
+                }
+            }
+            _ => {}
         }
     }
 }
