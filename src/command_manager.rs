@@ -1,15 +1,17 @@
 use std::{collections::HashMap, env, sync::Arc, time::Duration};
 
 use async_recursion::async_recursion;
+use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use serde::Deserialize;
-use serenity::prelude::Mutex;
+use serenity::{all::{Command, CommandOptionType, CreateCommand, CreateCommandOption, Http}, prelude::Mutex};
 use tokio::time::sleep;
 use tracing::{info, warn};
 
 #[derive(Default)]
 pub struct CommandManager {
     commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    pub ctx_http: RwLock<Option<Arc<Http>>>,
 }
 
 #[allow(non_snake_case)]
@@ -32,12 +34,8 @@ impl CommandManager {
     pub async fn new() -> Self {
         let manager = CommandManager::default();
 
-        let command_data = Self::get_command_data()
-            .await
-            .expect("Could not load command data from database");
-        manager.commands.lock().await.extend(command_data);
-        info!("Initially updated command data");
-        tokio::spawn(Self::command_updater(manager.commands.clone()));
+        tokio::spawn(Self::command_updater(manager.commands.clone(), manager.ctx_http.read().clone()));
+        info!("Started command data updater task");
         manager
     }
 
@@ -133,21 +131,45 @@ impl CommandManager {
         )
     }
 
-    async fn command_updater(commands: Arc<Mutex<HashMap<String, Vec<String>>>>) {
+    async fn command_updater(commands: Arc<Mutex<HashMap<String, Vec<String>>>>, ctx_http: Option<Arc<Http>>) {
         loop {
-            sleep(Duration::from_secs(20)).await;
-            let command_data: Result<HashMap<String, Vec<String>>, reqwest::Error> =
+            let new_command_res: Result<HashMap<String, Vec<String>>, reqwest::Error> =
                 Self::get_command_data().await;
 
-            match command_data {
-                Ok(data) => {
-                    *commands.lock().await = data;
-                    info!("Successfully updated command data");
+            match new_command_res {
+                Ok(new_commands) => {
+                    let command_data_change = {
+                        let mut current_commands = commands.lock().await;
+                        let command_data_change = !current_commands.keys().eq(new_commands.keys());
+                        *current_commands = new_commands;
+                        info!("Successfully updated command data");
+                        command_data_change
+                    };
+
+                    if let Some(ref ctx_http) = ctx_http {
+                        if command_data_change {
+
+                            Command::create_global_command( // TODO: add command autocompletion
+                                ctx_http,
+                                CreateCommand::new("bruh")
+                                    .description("Play a sound")
+                                    .add_option(CreateCommandOption::new(
+                                        CommandOptionType::String,
+                                        "sound",
+                                        "Name of sound",
+                                    )),
+                            )
+                            .await
+                            .ok();                    
+
+                        }
+                    }
                 }
                 Err(err) => {
                     warn!("Failed updating command data: {err}");
                 }
             }
+            sleep(Duration::from_secs(20)).await;
         }
     }
 }

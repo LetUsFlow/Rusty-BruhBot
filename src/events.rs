@@ -5,11 +5,11 @@ use serenity::{
     all::CommandDataOptionValue,
     async_trait,
     builder::{
-        CreateCommand, CreateCommandOption, CreateInteractionResponse,
+        CreateCommand, CreateInteractionResponse,
         CreateInteractionResponseMessage,
     },
     model::{
-        application::{Command, CommandDataOption, CommandOptionType, Interaction},
+        application::{Command, CommandDataOption, Interaction},
         gateway::Ready,
         prelude::{GuildId, Message},
     },
@@ -57,16 +57,19 @@ impl serenity::prelude::EventHandler for DiscordHandler {
 
         Command::create_global_command(
             &ctx.http,
-            CreateCommand::new("bruh")
-                .description("Play a sound")
-                .add_option(CreateCommandOption::new(
-                    CommandOptionType::String,
-                    "sound",
-                    "Name of sound",
-                )),
+            CreateCommand::new("bruhelp").description("BruhBot Help"),
         )
         .await
-        .ok();
+        .expect("Created global bruhelp command");
+        Command::create_global_command(
+            &ctx.http,
+            CreateCommand::new("brelp").description("BruhBot Help"),
+        )
+        .await
+        .expect("Created global brelp command");
+
+        let mut ctx_http = self.commands.ctx_http.write();
+        *ctx_http = Some(ctx.http);
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -103,6 +106,9 @@ impl serenity::prelude::EventHandler for DiscordHandler {
                         }
                         _ => self.commands.list_commands().await,
                     }
+                }
+                "bruhelp" | "brelp" => {
+                    self.commands.list_commands().await
                 }
                 _ => "i donbt know dis command uwu :(".into(),
             };
