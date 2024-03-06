@@ -83,4 +83,4 @@ docker run -d --env-file .env --net=host ghcr.io/letusflow/rusty-bruhbot
 ```
 
 ## License
-[ISC](LICENSE)
+[GPL](LICENSE)
