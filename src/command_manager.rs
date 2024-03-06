@@ -7,9 +7,8 @@ use serenity::prelude::Mutex;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-#[derive(Default)]
 pub struct CommandManager {
-    pub commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
 
 #[allow(non_snake_case)]
@@ -28,15 +27,19 @@ struct SupabaseCommandItem {
     audio: String,
 }
 
-impl CommandManager {
-    pub async fn new() -> Self {
-        let manager = CommandManager::default();
+impl Default for CommandManager {
+    fn default() -> Self {
+        let manager = CommandManager {
+            commands: Arc::default(),
+        };
 
         tokio::spawn(Self::command_updater(manager.commands.clone()));
         info!("Started command data updater task");
         manager
     }
+}
 
+impl CommandManager {
     pub async fn get_sound_uri(&self, sound: &str) -> Option<String> {
         self.commands
             .lock()
@@ -45,14 +48,12 @@ impl CommandManager {
             .and_then(|choices| choices.choose(&mut rand::thread_rng()).cloned())
     }
 
-    pub async fn list_commands(&self) -> String {
-        let mut v = self
-            .commands
-            .lock()
-            .await
-            .keys()
-            .cloned()
-            .collect::<Vec<String>>();
+    pub async fn get_commands(&self) -> Vec<String> {
+        self.commands.lock().await.keys().cloned().collect()
+    }
+
+    pub async fn get_human_readable_command_list(&self) -> String {
+        let mut v = self.get_commands().await;
         v.sort();
         v.join(", ")
     }

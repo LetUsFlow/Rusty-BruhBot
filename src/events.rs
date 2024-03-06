@@ -21,9 +21,10 @@ use tracing::{info, warn};
 use crate::command_manager::CommandManager;
 use crate::player::play_sound;
 
+#[derive(Default)]
 pub struct DiscordHandler {
-    pub connections: Arc<Mutex<HashSet<GuildId>>>,
-    pub commands: CommandManager,
+    connections: Arc<Mutex<HashSet<GuildId>>>,
+    command_manager: CommandManager,
 }
 
 #[async_trait]
@@ -34,7 +35,10 @@ impl serenity::prelude::EventHandler for DiscordHandler {
         if content == "brelp" || content == "bruhelp" {
             if let Err(why) = msg
                 .channel_id
-                .say(&ctx.http, self.commands.list_commands().await)
+                .say(
+                    &ctx.http,
+                    self.command_manager.get_human_readable_command_list().await,
+                )
                 .await
             {
                 warn!("Error sending message: {why:?}");
@@ -42,10 +46,11 @@ impl serenity::prelude::EventHandler for DiscordHandler {
         } else if let Some(guild_id) = msg.guild_id {
             play_sound(
                 &ctx,
-                self,
                 guild_id,
                 author_id,
-                content,
+                self.command_manager
+                    .get_sound_uri(&content.trim().to_lowercase())
+                    .await,
                 self.connections.clone(),
             )
             .await;
@@ -100,17 +105,18 @@ impl serenity::prelude::EventHandler for DiscordHandler {
                                 // command in guild
                                 let play_status = play_sound(
                                     &ctx,
-                                    self,
                                     author.guild_id,
                                     author.user.id,
-                                    sound.to_string(),
+                                    self.command_manager
+                                        .get_sound_uri(&sound.to_string().trim().to_lowercase())
+                                        .await,
                                     self.connections.clone(),
                                 )
                                 .await;
 
                                 match play_status {
                                     true => ":sunglasses:".into(),
-                                    false => ":skull:".into(),
+                                    false => "This sound doesn't exist :skull:".into(),
                                 }
                             }
                             (_, None) => {
@@ -118,49 +124,50 @@ impl serenity::prelude::EventHandler for DiscordHandler {
                                 "You shouldn't be here, I shouldn't be here, we both know it..."
                                     .into()
                             }
-                            _ => self.commands.list_commands().await,
+                            _ => self.command_manager.get_human_readable_command_list().await,
                         }
                     }
-                    "bruhelp" | "brelp" => self.commands.list_commands().await,
+                    "bruhelp" | "brelp" => {
+                        self.command_manager.get_human_readable_command_list().await
+                    }
                     _ => "i donbt know dis command uwu :(".into(),
                 };
 
-                let data = CreateInteractionResponseMessage::new().content(content);
-
                 if let Err(why) = command
-                    .create_response(&ctx.http, CreateInteractionResponse::Message(data))
+                    .create_response(
+                        &ctx.http,
+                        CreateInteractionResponse::Message(
+                            CreateInteractionResponseMessage::new().content(content),
+                        ),
+                    )
                     .await
                 {
                     warn!("Cannot respond to slash command: {why}");
                 }
             }
             Interaction::Autocomplete(autocomplete) => {
-                println!("{:?}", autocomplete.data.options[0].value);
                 let command_text = autocomplete.data.options[0].value.as_str().unwrap();
 
-                let responses = self
-                    .commands
-                    .commands
-                    .lock()
+                let options = self
+                    .command_manager
+                    .get_commands()
                     .await
-                    .keys()
-                    .cloned()
+                    .into_iter()
                     .filter(|cmd| cmd.starts_with(command_text))
                     .take(25)
-                    .collect::<Vec<String>>();
-
-                let response = CreateAutocompleteResponse::new().set_choices(
-                    responses
-                        .iter()
-                        .map(|cmd| AutocompleteChoice::new(cmd.clone(), cmd.clone()))
-                        .collect(),
-                );
+                    .map(|cmd| AutocompleteChoice::new(cmd.clone(), cmd.clone()))
+                    .collect::<Vec<AutocompleteChoice>>();
 
                 if let Err(why) = autocomplete
-                    .create_response(&ctx.http, CreateInteractionResponse::Autocomplete(response))
+                    .create_response(
+                        &ctx.http,
+                        CreateInteractionResponse::Autocomplete(
+                            CreateAutocompleteResponse::new().set_choices(options),
+                        ),
+                    )
                     .await
                 {
-                    warn!("Cannot respond to slash command: {why}");
+                    warn!("Cannot respond to slash command autocompletion request: {why}");
                 }
             }
             _ => {}

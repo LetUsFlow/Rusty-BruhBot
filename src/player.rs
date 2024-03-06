@@ -10,16 +10,11 @@ use crate::events::*;
 
 pub async fn play_sound(
     ctx: &Context,
-    handler: &DiscordHandler,
     guild_id: GuildId,
     author_id: UserId,
-    sound: String,
+    sound_uri: Option<String>,
     connections: Arc<Mutex<HashSet<GuildId>>>,
 ) -> bool {
-    let sound_uri = handler
-        .commands
-        .get_sound_uri(&sound.trim().to_lowercase())
-        .await;
     let sound_uri = match sound_uri {
         Some(sound_uri) => sound_uri,
         None => return false,
