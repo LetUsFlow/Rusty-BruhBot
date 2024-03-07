@@ -1,4 +1,4 @@
-FROM rust:1-slim-bullseye as builder
+FROM rust:1-slim-bookworm as builder
 WORKDIR /app
 COPY . /app
 ENV LIBOPUS_STATIC=true
