@@ -1,9 +1,12 @@
 use std::{collections::HashSet, sync::Arc};
 
-use parking_lot::Mutex;
 use reqwest::Client as HttpClient;
-use serenity::{all::UserId, model::prelude::GuildId, prelude::Context};
+use serenity::{
+    client::Context,
+    model::id::{GuildId, UserId},
+};
 use songbird::{input::HttpRequest, tracks::Track, TrackEvent};
+use tokio::sync::Mutex;
 use tracing::warn;
 
 use crate::events::*;
@@ -14,7 +17,7 @@ pub enum PlayStatus {
     StartedPlaying,
     VoiceChannelNotFound,
     GuildNotFound,
-    JoinError
+    JoinError,
 }
 
 pub async fn play_sound(
@@ -56,7 +59,7 @@ pub async fn play_sound(
         .expect("Songbird Voice client placed in at initialisation")
         .clone();
 
-    if !connections.lock().insert(guild_id) {
+    if !connections.lock().await.insert(guild_id) {
         return PlayStatus::AlreadyPlaying;
     }
 
@@ -88,7 +91,7 @@ pub async fn play_sound(
 
         PlayStatus::StartedPlaying
     } else {
-        connections.lock().remove(&guild_id);
+        connections.lock().await.remove(&guild_id);
         PlayStatus::JoinError
     }
 }

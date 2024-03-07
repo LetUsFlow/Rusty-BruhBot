@@ -1,7 +1,8 @@
-use dotenvy::dotenv;
-use serenity::prelude::*;
-use songbird::SerenityInit;
 use std::env;
+
+use dotenvy::dotenv;
+use serenity::{model::gateway::GatewayIntents, Client};
+use songbird::SerenityInit;
 use tracing::error;
 
 mod command_manager;

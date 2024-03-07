@@ -3,8 +3,7 @@ use std::{collections::HashMap, env, sync::Arc, time::Duration};
 use async_recursion::async_recursion;
 use rand::seq::SliceRandom;
 use serde::Deserialize;
-use serenity::prelude::Mutex;
-use tokio::time::sleep;
+use tokio::{sync::Mutex, time::sleep};
 use tracing::{info, warn};
 
 pub struct CommandManager {
