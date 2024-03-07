@@ -64,7 +64,7 @@ Rusty-BruhBot uses [PocketBase](https://pocketbase.io/) to store commands an sou
 
 ### External dependencies
 For this bot to work **opus** needs to be installed on your system.
-For more details on how to install these dependencies, look at the [dependencies](https://github.com/serenity-rs/songbird/#dependencies) section of [Songbird](https://github.com/serenity-rs/songbird). For everything else audio-related BruhBot uses Symphonia, intoduced in Songbird 0.4.0.
+For more details on how to install these dependencies, look at the [dependencies](https://github.com/serenity-rs/songbird/#dependencies) section of [Songbird](https://github.com/serenity-rs/songbird). For everything else audio-related BruhBot uses Symphonia, introduced in Songbird 0.4.0.
 
 ## Configuration
 
