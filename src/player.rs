@@ -8,16 +8,25 @@ use tracing::warn;
 
 use crate::events::*;
 
+pub enum PlayStatus {
+    AlreadyPlaying,
+    SoundNotFound,
+    StartedPlaying,
+    VoiceChannelNotFound,
+    GuildNotFound,
+    JoinError
+}
+
 pub async fn play_sound(
     ctx: &Context,
     guild_id: GuildId,
     author_id: UserId,
     sound_uri: Option<String>,
     connections: Arc<Mutex<HashSet<GuildId>>>,
-) -> bool {
+) -> PlayStatus {
     let sound_uri = match sound_uri {
         Some(sound_uri) => sound_uri,
-        None => return false,
+        None => return PlayStatus::SoundNotFound,
     };
 
     let channel_id = {
@@ -25,7 +34,7 @@ pub async fn play_sound(
             Some(guild) => guild,
             None => {
                 warn!("Cannot find guild in cache: {}", guild_id);
-                return false;
+                return PlayStatus::GuildNotFound;
             }
         };
 
@@ -38,8 +47,7 @@ pub async fn play_sound(
     let connect_to = match channel_id {
         Some(channel) => channel,
         None => {
-            warn!("Cannot find channel: {channel_id:?}");
-            return false;
+            return PlayStatus::VoiceChannelNotFound;
         }
     };
 
@@ -49,7 +57,7 @@ pub async fn play_sound(
         .clone();
 
     if !connections.lock().insert(guild_id) {
-        return false;
+        return PlayStatus::AlreadyPlaying;
     }
 
     // Create audio source
@@ -78,9 +86,9 @@ pub async fn play_sound(
             )
             .ok();
 
-        true
+        PlayStatus::StartedPlaying
     } else {
         connections.lock().remove(&guild_id);
-        false
+        PlayStatus::JoinError
     }
 }

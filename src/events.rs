@@ -19,7 +19,7 @@ use songbird::{tracks::TrackHandle, Call, Event, EventContext};
 use tracing::{info, warn};
 
 use crate::command_manager::CommandManager;
-use crate::player::play_sound;
+use crate::player::{play_sound, PlayStatus};
 
 #[derive(Default)]
 pub struct DiscordHandler {
@@ -29,34 +29,6 @@ pub struct DiscordHandler {
 
 #[async_trait]
 impl serenity::prelude::EventHandler for DiscordHandler {
-    async fn message(&self, ctx: Context, msg: Message) {
-        let author_id = msg.author.id;
-        let content = msg.content.trim().to_lowercase();
-        if content == "brelp" || content == "bruhelp" {
-            if let Err(why) = msg
-                .channel_id
-                .say(
-                    &ctx.http,
-                    self.command_manager.get_human_readable_command_list().await,
-                )
-                .await
-            {
-                warn!("Error sending message: {why:?}");
-            }
-        } else if let Some(guild_id) = msg.guild_id {
-            play_sound(
-                &ctx,
-                guild_id,
-                author_id,
-                self.command_manager
-                    .get_sound_uri(&content.trim().to_lowercase())
-                    .await,
-                self.connections.clone(),
-            )
-            .await;
-        }
-    }
-
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
 
@@ -87,6 +59,34 @@ impl serenity::prelude::EventHandler for DiscordHandler {
         .expect("Created global bruh command");
     }
 
+    async fn message(&self, ctx: Context, msg: Message) {
+        let author_id = msg.author.id;
+        let content = msg.content.trim().to_lowercase();
+        if content == "brelp" || content == "bruhelp" {
+            if let Err(why) = msg
+                .channel_id
+                .say(
+                    &ctx.http,
+                    self.command_manager.get_human_readable_command_list().await,
+                )
+                .await
+            {
+                warn!("Error sending message: {why:?}");
+            }
+        } else if let Some(guild_id) = msg.guild_id {
+            play_sound(
+                &ctx,
+                guild_id,
+                author_id,
+                self.command_manager
+                    .get_sound_uri(&content.trim().to_lowercase())
+                    .await,
+                self.connections.clone(),
+            )
+            .await;
+        }
+    }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         match interaction {
             Interaction::Command(command) => {
@@ -102,21 +102,31 @@ impl serenity::prelude::EventHandler for DiscordHandler {
                                 }),
                                 Some(author),
                             ) => {
+                                let sound_name = sound.trim().to_lowercase();
+
                                 // command in guild
                                 let play_status = play_sound(
                                     &ctx,
                                     author.guild_id,
                                     author.user.id,
-                                    self.command_manager
-                                        .get_sound_uri(&sound.to_string().trim().to_lowercase())
-                                        .await,
+                                    self.command_manager.get_sound_uri(&sound_name).await,
                                     self.connections.clone(),
                                 )
                                 .await;
 
                                 match play_status {
-                                    true => ":sunglasses:".into(),
-                                    false => "This sound doesn't exist :skull:".into(),
+                                    PlayStatus::AlreadyPlaying => {
+                                        "Already playing a sound, just wait a sec! :)".into()
+                                    }
+                                    PlayStatus::SoundNotFound => {
+                                        "This sound doesn't exist :skull:".into()
+                                    }
+                                    PlayStatus::StartedPlaying => {
+                                        format!("Started playing {} :sunglasses:", sound_name)
+                                    }
+                                    PlayStatus::VoiceChannelNotFound => "You are not joined any voice channel on this server :clown:".into(),
+                                    PlayStatus::GuildNotFound => "Could not find guild :person_shrugging:".into(),
+                                    PlayStatus::JoinError => "Could not join voice channel :person_shrugging:".into(),
                                 }
                             }
                             (_, None) => {
