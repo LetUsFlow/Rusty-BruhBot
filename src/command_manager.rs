@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_recursion::async_recursion;
 use rand::seq::SliceRandom;
@@ -102,7 +102,7 @@ impl CommandManager {
     async fn get_command_data() -> Result<HashMap<String, Vec<String>>, reqwest::Error> {
         let mut res: HashMap<String, Vec<String>> = HashMap::new();
 
-        let api = env::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
+        let api = dotenvy::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
         let source = Self::get_full_list(&api, "sounds").await?;
 
         for item in source.items {

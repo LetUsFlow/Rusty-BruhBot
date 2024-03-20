@@ -1,6 +1,3 @@
-use std::env;
-
-use dotenvy::dotenv;
 use serenity::{model::gateway::GatewayIntents, Client};
 use songbird::SerenityInit;
 use tracing::error;
@@ -11,13 +8,11 @@ mod player;
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
-
     // Enable logging
     tracing_subscriber::fmt::init();
 
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
+    let token = dotenvy::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
 
     // Build client
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
