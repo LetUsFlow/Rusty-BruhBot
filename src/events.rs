@@ -64,18 +64,7 @@ impl serenity::all::EventHandler for DiscordHandler {
     async fn message(&self, ctx: Context, msg: Message) {
         let author_id = msg.author.id;
         let content = msg.content.trim().to_lowercase();
-        if content == "brelp" || content == "bruhelp" {
-            if let Err(why) = msg
-                .channel_id
-                .say(
-                    &ctx.http,
-                    self.command_manager.get_human_readable_command_list().await,
-                )
-                .await
-            {
-                warn!("Error sending message: {why:?}");
-            }
-        } else if let Some(guild_id) = msg.guild_id {
+        if let Some(guild_id) = msg.guild_id {
             play_sound(
                 &ctx,
                 guild_id,
