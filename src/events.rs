@@ -30,7 +30,7 @@ pub struct DiscordHandler {
 }
 
 #[async_trait]
-impl serenity::all::EventHandler for DiscordHandler {
+impl serenity::client::EventHandler for DiscordHandler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
 
