@@ -150,7 +150,7 @@ impl serenity::client::EventHandler for DiscordHandler {
                     .into_iter()
                     .filter(|cmd| cmd.starts_with(command_text))
                     .take(25)
-                    .map(|cmd| AutocompleteChoice::new(cmd.clone(), cmd.clone()))
+                    .map(|cmd| AutocompleteChoice::new(cmd.clone(), cmd))
                     .collect::<Vec<AutocompleteChoice>>();
 
                 if let Err(why) = autocomplete

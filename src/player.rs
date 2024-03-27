@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use reqwest::Client as HttpClient;
 use serenity::{
@@ -6,8 +6,8 @@ use serenity::{
     model::id::{GuildId, UserId},
 };
 use songbird::{input::HttpRequest, tracks::Track, TrackEvent};
-use tokio::sync::Mutex;
-use tracing::warn;
+use tokio::{sync::Mutex, time::sleep};
+use tracing::{warn, error};
 
 use crate::events::*;
 
@@ -59,39 +59,45 @@ pub async fn play_sound(
         .expect("Songbird Voice client placed in at initialisation")
         .clone();
 
-    if !connections.lock().await.insert(guild_id) {
-        return PlayStatus::AlreadyPlaying;
-    }
-
     // Create audio source
     let source = HttpRequest::new(HttpClient::new(), sound_uri);
 
     // Create audio handler
     let audio = Track::from(source);
 
-    if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
-        let mut handler = handler_lock.lock().await;
+    if !connections.lock().await.insert(guild_id) {
+        return PlayStatus::AlreadyPlaying;
+    }
 
-        // Start playing audio
-        let audio_handle = handler.play_only(audio);
+    match manager.join(guild_id, connect_to).await {
+        Ok(handler_lock) => {
+            let mut handler = handler_lock.lock().await;
 
-        // Add disconnect eventlistener
-        handler.add_global_event(
-            songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
-            DriverDisconnectNotifier::new(audio_handle.clone(), guild_id, connections),
-        );
+            // Start playing audio
+            let audio_handle = handler.play_only(audio);
 
-        // Add track end eventlistener
-        audio_handle
-            .add_event(
-                songbird::Event::Track(TrackEvent::End),
-                TrackEndNotifier::new(handler_lock.clone()),
-            )
-            .ok();
+            // Add disconnect eventlistener
+            handler.add_global_event(
+                songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
+                DriverDisconnectNotifier::new(audio_handle.clone(), guild_id, connections),
+            );
 
-        PlayStatus::StartedPlaying
-    } else {
-        connections.lock().await.remove(&guild_id);
-        PlayStatus::JoinError
+            // Add track end eventlistener
+            audio_handle
+                .add_event(
+                    songbird::Event::Track(TrackEvent::End),
+                    TrackEndNotifier::new(handler_lock.clone()),
+                )
+                .ok();
+
+            PlayStatus::StartedPlaying
+        }
+        Err(why) => {
+            error!("{}", why);
+            sleep(Duration::from_secs(2)).await;
+            manager.leave(guild_id).await.ok();
+            connections.lock().await.remove(&guild_id);
+            PlayStatus::JoinError
+        }
     }
 }
