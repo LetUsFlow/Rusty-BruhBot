@@ -39,12 +39,32 @@ impl Default for CommandManager {
 }
 
 impl CommandManager {
-    pub async fn get_sound_uri(&self, sound: &str) -> Option<String> {
-        self.commands
+    #[async_recursion]
+    pub async fn get_sound_uri(&self, sound: String) -> (String, Option<String>) {
+        let uri = self
+            .commands
             .lock()
             .await
-            .get(sound)
-            .and_then(|choices| choices.choose(&mut rand::thread_rng()).cloned())
+            .get(&sound)
+            .and_then(|choices| choices.choose(&mut rand::thread_rng()).cloned());
+        match uri {
+            Some(uri) => {
+                (sound, Some(uri))
+            }
+            None => {
+                let similars = self
+                    .get_commands()
+                    .await
+                    .into_iter()
+                    .filter(|key| key.starts_with(&sound))
+                    .collect::<Vec<String>>();
+                if similars.len() == 1 {
+                    self.get_sound_uri(similars[0].clone()).await
+                } else {
+                    (sound, None)
+                }
+            }
+        }
     }
 
     pub async fn get_commands(&self) -> Vec<String> {

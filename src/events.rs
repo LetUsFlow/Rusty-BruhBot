@@ -70,8 +70,8 @@ impl serenity::client::EventHandler for DiscordHandler {
                 guild_id,
                 author_id,
                 self.command_manager
-                    .get_sound_uri(&content.trim().to_lowercase())
-                    .await,
+                    .get_sound_uri(content.trim().to_lowercase())
+                    .await.1,
                 self.connections.clone(),
             )
             .await;
@@ -94,13 +94,14 @@ impl serenity::client::EventHandler for DiscordHandler {
                                 Some(author),
                             ) => {
                                 let sound_name = sound.trim().to_lowercase();
+                                let sound = self.command_manager.get_sound_uri(sound_name).await;
 
                                 // command in guild
                                 let play_status = play_sound(
                                     &ctx,
                                     author.guild_id,
                                     author.user.id,
-                                    self.command_manager.get_sound_uri(&sound_name).await,
+                                    sound.1,
                                     self.connections.clone(),
                                 )
                                 .await;
@@ -108,7 +109,7 @@ impl serenity::client::EventHandler for DiscordHandler {
                                 match play_status {
                                     PlayStatus::AlreadyPlaying => "Already playing a sound, just wait a sec! :)".into(),
                                     PlayStatus::SoundNotFound => "This sound doesn't exist :skull:".into(),
-                                    PlayStatus::StartedPlaying => format!("Started playing {} :sunglasses:", sound_name),
+                                    PlayStatus::StartedPlaying => format!("Started playing {} :sunglasses:", sound.0),
                                     PlayStatus::VoiceChannelNotFound => "You are not joined any voice channel on this server :clown:".into(),
                                     PlayStatus::GuildNotFound => "Could not find guild :person_shrugging:".into(),
                                     PlayStatus::JoinError => "Could not join voice channel :person_shrugging:".into(),
