@@ -71,7 +71,8 @@ impl serenity::client::EventHandler for DiscordHandler {
                 author_id,
                 self.command_manager
                     .get_sound_uri(content.trim().to_lowercase())
-                    .await.1,
+                    .await
+                    .1,
                 self.connections.clone(),
             )
             .await;

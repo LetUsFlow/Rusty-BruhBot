@@ -7,7 +7,7 @@ use serenity::{
 };
 use songbird::{input::HttpRequest, tracks::Track, TrackEvent};
 use tokio::{sync::Mutex, time::sleep};
-use tracing::{warn, error};
+use tracing::{error, warn};
 
 use crate::events::*;
 

@@ -48,9 +48,7 @@ impl CommandManager {
             .get(&sound)
             .and_then(|choices| choices.choose(&mut rand::thread_rng()).cloned());
         match uri {
-            Some(uri) => {
-                (sound, Some(uri))
-            }
+            Some(uri) => (sound, Some(uri)),
             None => {
                 let similars = self
                     .get_commands()
@@ -83,10 +81,9 @@ impl CommandManager {
         page: usize,
         per_page: usize,
     ) -> Result<SupabaseCommandsList, reqwest::Error> {
-        reqwest::get(
-            api.to_owned()
-                + &format!("/api/collections/{collection}/records?page={page}&perPage={per_page}"),
-        )
+        reqwest::get(format!(
+            "{api}/api/collections/{collection}/records?page={page}&perPage={per_page}"
+        ))
         .await?
         .json::<SupabaseCommandsList>()
         .await
