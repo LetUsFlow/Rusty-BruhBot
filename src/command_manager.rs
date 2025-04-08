@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_recursion::async_recursion;
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 use serde::Deserialize;
 use tokio::{sync::Mutex, time::sleep};
 use tracing::{info, warn};
@@ -46,7 +46,7 @@ impl CommandManager {
             .lock()
             .await
             .get(&sound)
-            .and_then(|choices| choices.choose(&mut rand::thread_rng()).cloned());
+            .and_then(|choices| choices.choose(&mut rand::rng()).cloned());
         match uri {
             Some(uri) => (sound, Some(uri)),
             None => {
