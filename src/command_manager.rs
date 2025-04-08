@@ -26,19 +26,20 @@ struct SupabaseCommandItem {
     audio: String,
 }
 
-impl Default for CommandManager {
-    fn default() -> Self {
+impl CommandManager {
+    pub fn new(pocketbase_api: String) -> Self {
         let manager = CommandManager {
             commands: Arc::default(),
         };
 
-        tokio::spawn(Self::command_updater(manager.commands.clone()));
+        tokio::spawn(Self::command_updater(
+            manager.commands.clone(),
+            pocketbase_api,
+        ));
         info!("Started command data updater task");
         manager
     }
-}
 
-impl CommandManager {
     #[async_recursion]
     pub async fn get_sound_uri(&self, sound: String) -> (String, Option<String>) {
         let uri = self
@@ -116,22 +117,22 @@ impl CommandManager {
         Ok(())
     }
 
-    async fn get_command_data() -> Result<HashMap<String, Vec<String>>, reqwest::Error> {
+    async fn get_command_data(
+        pocketbase_api: &String,
+    ) -> Result<HashMap<String, Vec<String>>, reqwest::Error> {
         let mut res: HashMap<String, Vec<String>> = HashMap::new();
 
-        let api =
-            dotenvy::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
-        let source = Self::get_full_list(&api, "sounds").await?;
+        let source = Self::get_full_list(pocketbase_api, "sounds").await?;
 
         for item in source.items {
             match res.get_mut(&item.command) {
                 Some(urls) => {
-                    urls.push(Self::format_api_url(&item, &api));
+                    urls.push(Self::format_api_url(&item, pocketbase_api));
                 }
                 None => {
                     res.insert(
                         item.clone().command,
-                        vec![Self::format_api_url(&item, &api)],
+                        vec![Self::format_api_url(&item, pocketbase_api)],
                     );
                 }
             }
@@ -147,10 +148,13 @@ impl CommandManager {
         )
     }
 
-    async fn command_updater(commands: Arc<Mutex<HashMap<String, Vec<String>>>>) {
+    async fn command_updater(
+        commands: Arc<Mutex<HashMap<String, Vec<String>>>>,
+        pocketbase_api: String,
+    ) {
         loop {
             let command_data: Result<HashMap<String, Vec<String>>, reqwest::Error> =
-                Self::get_command_data().await;
+                Self::get_command_data(&pocketbase_api).await;
 
             match command_data {
                 Ok(data) => {

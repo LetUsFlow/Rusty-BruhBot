@@ -23,10 +23,18 @@ use tracing::{info, warn};
 use crate::command_manager::CommandManager;
 use crate::player::{play_sound, PlayStatus};
 
-#[derive(Default)]
 pub struct DiscordHandler {
     connections: Arc<Mutex<HashSet<GuildId>>>,
     command_manager: CommandManager,
+}
+
+impl DiscordHandler {
+    pub fn new(pocketbase_api: String) -> Self {
+        DiscordHandler {
+            connections: Arc::default(),
+            command_manager: CommandManager::new(pocketbase_api),
+        }
+    }
 }
 
 #[async_trait]

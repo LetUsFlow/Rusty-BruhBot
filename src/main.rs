@@ -14,10 +14,13 @@ async fn main() {
     // Configure the client with your Discord bot token in the environment.
     let token = dotenvy::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
 
+    let pocketbase_api =
+        dotenvy::var("POCKETBASE_API").expect("Expected POCKETBASE_API in the environment");
+
     // Build client
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(token, intents)
-        .event_handler(events::DiscordHandler::default())
+        .event_handler(events::DiscordHandler::new(pocketbase_api))
         .register_songbird()
         .await
         .expect("Error creating client");
