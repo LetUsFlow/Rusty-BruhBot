@@ -21,7 +21,5 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 symphonia = { features = ["mp3",], version = "0.5" }
 
 [profile.release]
-opt-level = 'z'     # Optimize for size
-lto = true          # Enable link-time optimization
-codegen-units = 1   # Reduce number of codegen units to increase optimizations
-strip = true        # Strip symbols from binary*
+lto = true
+strip = true
