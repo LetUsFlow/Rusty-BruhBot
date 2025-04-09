@@ -1,9 +1,7 @@
-FROM rust:1-slim-bullseye as builder
+FROM rust:1-alpine AS builder
 WORKDIR /app
 COPY . /app
-ENV LIBOPUS_STATIC=true
-RUN apt-get update && \
-    apt-get install -y upx libopus-dev cmake
+RUN apk add upx make cmake musl-dev
 RUN cargo build --release && \
     upx --lzma --best /app/target/release/rusty-bruhbot
 
