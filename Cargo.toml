@@ -17,7 +17,7 @@ rand = "0.10"
 
 serenity = { version = "0.12.5", features = ["client", "standard_framework", "voice", "rustls_backend"] }
 tokio = { version = "1.51", features = ["macros", "rt-multi-thread", "signal"] }
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 symphonia = { features = ["mp3"], version = "0.5" }
 
 [profile.release]
