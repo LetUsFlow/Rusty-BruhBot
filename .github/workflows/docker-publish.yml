@@ -99,6 +99,7 @@ jobs:
           done
           docker buildx imagetools create \
             --tag "${IMAGE_NAME}:${GITHUB_REF_NAME#v}" \
+            --tag "${IMAGE_NAME}:latest" \
             "${sources[@]}"
 
       - name: Inspect published image
